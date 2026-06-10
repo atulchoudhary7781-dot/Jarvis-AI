@@ -1,0 +1,139 @@
+
+
+================================================================================
+Jarvis startup: 2026-05-24T19:33:28.772803
+================================================================================
+
+================================================================================
+Jarvis startup: 2026-05-24T19:35:45.893930
+================================================================================
+
+================================================================================
+Jarvis startup: 2026-05-26T11:50:27.568321
+================================================================================
+
+================================================================================
+Jarvis startup: 2026-06-02T23:30:41.374246
+================================================================================
+
+================================================================================
+Jarvis startup: 2026-06-02T23:30:43.894849
+================================================================================
+2026-06-02T23:32:30.149089 - Unhandled exception in thread Thread-1 (_init_startup_services)
+Traceback (most recent call last):
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "d:\Jarvis_Project\content\drive\MyDrive\Jarvis\jarvis_interface.py", line 723, in _init_startup_services
+    self.root.after(0, self._startup_complete)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\tkinter\__init__.py", line 887, in after
+    name = self._register(callit)
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\tkinter\__init__.py", line 1712, in _register
+    self.tk.createcommand(name, f)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+RuntimeError: main thread is not in main loop
+
+2026-06-02T23:32:37.397375 - Unhandled exception in thread Thread-1 (_init_startup_services)
+Traceback (most recent call last):
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "d:\Jarvis_Project\content\drive\MyDrive\Jarvis\jarvis_interface.py", line 723, in _init_startup_services
+    self.root.after(0, self._startup_complete)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\tkinter\__init__.py", line 887, in after
+    name = self._register(callit)
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\tkinter\__init__.py", line 1712, in _register
+    self.tk.createcommand(name, f)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+RuntimeError: main thread is not in main loop
+
+
+================================================================================
+Jarvis startup: 2026-06-02T23:34:15.010748
+================================================================================
+2026-06-02T23:34:46.905938 - Unhandled exception in thread Thread-1 (_init_startup_services)
+Traceback (most recent call last):
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\Jarvis_Project\content\drive\MyDrive\Jarvis\jarvis_interface.py", line 723, in _init_startup_services
+    self.root.after(0, self._startup_complete)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\tkinter\__init__.py", line 887, in after
+    name = self._register(callit)
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\tkinter\__init__.py", line 1712, in _register
+    self.tk.createcommand(name, f)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+RuntimeError: main thread is not in main loop
+
+
+================================================================================
+Jarvis startup: 2026-06-02T23:35:48.650897
+================================================================================
+
+================================================================================
+Jarvis startup: 2026-06-02T23:38:45.843832
+================================================================================
+2026-06-02T23:40:03.150087 - Unhandled exception in thread Thread-1 (_init_startup_services)
+Traceback (most recent call last):
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "d:\Jarvis_Project\content\drive\MyDrive\Jarvis\jarvis_interface.py", line 723, in _init_startup_services
+    self.root.after(0, self._startup_complete)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\tkinter\__init__.py", line 887, in after
+    name = self._register(callit)
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\tkinter\__init__.py", line 1712, in _register
+    self.tk.createcommand(name, f)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+RuntimeError: main thread is not in main loop
+
+
+================================================================================
+Jarvis startup: 2026-06-02T23:42:53.250834
+================================================================================
+2026-06-02T23:44:25.935702 - Unhandled exception in thread Thread-1 (_init_startup_services)
+Traceback (most recent call last):
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "d:\Jarvis_Project\content\drive\MyDrive\Jarvis\jarvis_interface.py", line 723, in _init_startup_services
+    self.root.after(0, self._startup_complete)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\tkinter\__init__.py", line 887, in after
+    name = self._register(callit)
+  File "C:\Users\Atul\AppData\Roaming\uv\python\cpython-3.14.5-windows-x86_64-none\Lib\tkinter\__init__.py", line 1712, in _register
+    self.tk.createcommand(name, f)
+    ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+RuntimeError: main thread is not in main loop
+
+
+================================================================================
+Jarvis startup: 2026-06-02T23:51:37.415690
+================================================================================
+
+================================================================================
+Jarvis startup: 2026-06-02T23:51:40.207067
+================================================================================
+
+================================================================================
+Jarvis startup: 2026-06-03T00:03:05.540526
+================================================================================
