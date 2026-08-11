@@ -3,24 +3,14 @@ JARVIS AI — Advanced Web Assistant (Streamlit)
 ================================================
 Just A Rather Very Intelligent System
 
-A UNIQUE AI experience with:
-- Multi-model AI Engine (GPT-4, Claude, Llama, Gemini)
-- Real-time Web Search
-- Code Execution Mode
-- Image Analysis
-- Iron Man-inspired Arc Reactor UI
-
-Deploy: Streamlit Cloud | Run: streamlit run app.py
+Clean Minimalist Interface - Like ChatGPT but JARVIS styled!
 """
 
 # ════════════════════════════════════════════════════════════════════════════════
-# CRITICAL: Path Setup
+# IMPORTS & CONFIG
 # ════════════════════════════════════════════════════════════════════════════════
-import os, sys
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-if _SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, _SCRIPT_DIR)
-
+import os
+import sys
 import io
 import json
 import base64
@@ -31,249 +21,230 @@ from PIL import Image
 
 # ── Page Config ───────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="JARVIS AI",
+    page_title="JARVIS",
     page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
     menu_items={
         "Get Help": None,
         "Report a bug": None,
-        "About": "# JARVIS AI\n**Your Advanced AI Personal Assistant**\n\nVoice-enabled • Multi-modal • Always Ready"
+        "About": "# J.A.R.V.I.S\n\n**Just A Rather Very Intelligent System**\n\nStark Industries AI Assistant"
     }
 )
 
-# ── Custom CSS (Dark Theme - Same as Original) ────────────────────────────────
+# ── Custom CSS (Minimalist Dark Theme) ────────────────────────────────────────
 st.markdown("""
 <style>
-/* === GLOBAL STYLES === */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
-
-:root {
-    --bg-dark: #000000;
-    --surface: #0a0a0a;
-    --surface-2: #1a1a1a;
-    --primary: #4a5fe8;
-    --primary-light: #6b7fff;
-    --secondary: #00d4ff;
-    --accent: #ff6b35;
-    --text-primary: #ffffff;
-    --text-secondary: #b0b0b0;
-    --success: #00c853;
-    --error: #ff5252;
+/* === GLOBAL RESET === */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
 }
 
-/* Main Background */
+/* Main App Background - Pure Black */
 .stApp {
-    background: linear-gradient(135deg, #000000 0%, #0a0a0a 50%, #111111 100%) !important;
+    background: #000000 !important;
+    min-height: 100vh;
 }
 
-/* Sidebar */
+/* Hide default Streamlit elements */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header { 
+    display: none !important;
+}
+
+/* Hide sidebar completely - we'll use custom nav */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #0a0a0a 0%, #000000 100%) !important;
-    border-right: 1px solid #222 !important;
+    display: none !important;
 }
 
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-    padding: 1rem;
-}
-
-/* Headers */
-h1, h2, h3 {
-    font-family: 'Inter', sans-serif !important;
-    color: var(--text-primary) !important;
-    font-weight: 600 !important;
-}
-
-/* Chat Messages */
+/* Chat Messages Styling */
 .stChatMessage {
     background: transparent !important;
-    border-radius: 12px !important;
-    margin: 0.5rem 0 !important;
-}
-
-/* User Message */
-.stChatMessage[data-testid="chatMessageUser"] {
-    background: linear-gradient(135deg, #1a237e 0%, #0d47a1 100%) !important;
-    border: 1px solid #2196f3 !important;
-}
-
-/* Assistant Message */
-.stChatMessage[data-testid="chatMessageAssistant"] {
-    background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%) !important;
-    border: 1px solid #333 !important;
-}
-
-/* Input Box */
-.stTextInput > label,
-.stTextArea > label {
-    color: var(--text-secondary) !important;
-    font-family: 'JetBrains Mono', monospace !important;
-}
-
-.stTextInput input,
-.stTextArea textarea {
-    background: #1a1a1a !important;
-    border: 1px solid #333 !important;
-    border-radius: 8px !important;
-    color: white !important;
-    font-family: 'Inter', sans-serif !important;
-}
-
-.stTextInput input:focus,
-.stTextArea textarea:focus {
-    border-color: var(--primary) !important;
-    box-shadow: 0 0 10px rgba(74, 95, 232, 0.3) !important;
-}
-
-/* Buttons */
-.stButton button {
-    background: linear-gradient(135deg, var(--primary) 0%, #3d4fd9 100%) !important;
     border: none !important;
-    border-radius: 8px !important;
-    color: white !important;
-    font-weight: 600 !important;
-    transition: all 0.3s ease !important;
+    padding: 1rem 0;
 }
 
-.stButton button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 20px rgba(74, 95, 232, 0.4) !important;
-}
-
-/* Sidebar Buttons */
-[data-testid="stSidebar"] .stButton button {
-    justify-content: flex-start !important;
+.stChatMessage[data-testid="chatMessageUser"] {
     background: transparent !important;
     border: none !important;
-    color: var(--text-secondary) !important;
-    font-weight: 500 !important;
+}
+
+.stChatMessage[data-testid="chatMessageUser"] .stMarkdown {
+    background: #1a1a2e !important;
+    padding: 1rem 1.5rem;
+    border-radius: 18px;
+    color: #ffffff;
+}
+
+.stChatMessage[data-testid="chatMessageAssistant"] {
+    background: transparent !important;
+    border: none !important;
+}
+
+.stChatMessage[data-testid="chatMessageAssistant"] .stMarkdown {
+    background: #0d0d0d !important;
+    padding: 1rem 1.5rem;
+    border-radius: 18px;
+    border: 1px solid #222;
+    color: #e0e0e0;
+}
+
+/* Input Area Styling */
+.stTextInput > div > div > input {
+    background: #1a1a1a !important;
+    border: 1px solid #333 !important;
+    border-radius: 25px !important;
+    color: #fff !important;
+    font-size: 1rem !important;
     padding: 0.75rem 1rem !important;
 }
 
-[data-testid="stSidebar"] .stButton button:hover {
+.stTextInput > div > div > input:focus {
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1) !important;
+}
+
+/* Button Styling */
+.stButton > button {
+    border-radius: 20px !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+}
+
+/* Primary Button (Send/Action) */
+.primary-btn {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 50% !important;
+    width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.primary-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+}
+
+/* Secondary Button (Clear/Menu) */
+.secondary-btn {
+    background: transparent !important;
+    color: #888 !important;
+    border: 1px solid #333 !important;
+    border-radius: 8px !important;
+    padding: 0.5rem 1rem !important;
+}
+
+.secondary-btn:hover {
     background: #1a1a1a !important;
-    color: var(--primary-light) !important;
+    color: #fff !important;
+    border-color: #444 !important;
 }
 
-/* Status Badge */
-.status-badge {
-    display: inline-flex;
+/* Upgrade Button */
+.upgrade-btn {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 0.5rem 1.25rem !important;
+    font-weight: 600 !important;
+}
+
+.upgrade-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+}
+
+/* Container for main content */
+.main-container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+/* Welcome Text */
+.welcome-text {
+    text-align: center;
+    color: #fff;
+    font-size: 2rem;
+    font-weight: 500;
+    margin-top: 15vh;
+    letter-spacing: -0.5px;
+}
+
+/* Floating Input Container */
+.floating-input {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 800px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 30px;
+    padding: 0.5rem;
+    display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    font-family: 'JetBrains Mono', monospace;
-}
-
-.status-online {
-    background: rgba(0, 200, 83, 0.15);
-    color: #00c853;
-    border: 1px solid rgba(0, 200, 83, 0.3);
-}
-
-.status-thinking {
-    background: rgba(255, 107, 53, 0.15);
-    color: #ff6b35;
-    border: 1px solid rgba(255, 107, 53, 0.3);
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-/* Feature Cards */
-.feature-card {
-    background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
-    border: 1px solid #2a2a2a;
-    border-radius: 16px;
-    padding: 1.5rem;
-    transition: all 0.3s ease;
-}
-
-.feature-card:hover {
-    border-color: var(--primary);
-    transform: translateY(-4px);
+    gap: 0.5rem;
+    z-index: 1000;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.floating-input:focus-within {
+    border-color: #6366f1;
+    box-shadow: 0 10px 40px rgba(99, 102, 241, 0.2);
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
 }
 
 ::-webkit-scrollbar-track {
-    background: #0a0a0a;
+    background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
     background: #333;
-    border-radius: 4px;
+    border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
     background: #555;
-}
-
-/* Hide default elements */
-#MainMenu { visibility: hidden; }
-footer { visibility: hidden; }
-
-header { 
-    background: transparent !important;
 }
 </style>
 """, unsafe_allow_html=True)
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# 🔑 API KEY CONFIGURATION
+# API KEY CONFIGURATION
 # ════════════════════════════════════════════════════════════════════════════════
-# ⚠️ IMPORTANT: API Key required for JARVIS to work!
-#
-# SETUP OPTIONS:
-# ────────────────────────────────────────────────────────────────
-# Option 1: Streamlit Cloud (Recommended for deployment)
-#   Go to: App Settings → Secrets → Add: OPENROUTER_API_KEY=your_key
-#
-# Option 2: Local .env file
-#   Create .env file in project root with: OPENROUTER_API_KEY=your_key
-#
-# Option 3: Environment variable
-#   export OPENROUTER_API_KEY=your_key
-#
-# Get FREE API key at: https://openrouter.ai/keys
-# ────────────────────────────────────────────────────────────────
-
 import dotenv
 dotenv.load_dotenv()
 
-# Try to get API key from multiple sources
 API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 
-# For local testing only - comment out before deploying to GitHub!
-if not API_KEY:
-    # Check if running locally (not on Streamlit Cloud)
-    if os.getenv("STREAMLIT_SHARING_MODE") is None:
-        # Local development mode - you can set key here for testing
-        pass  # Use .env file or environment variable
 
-
-# ── Initialize Session State ─────────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════════════════════════
+# SESSION STATE INITIALIZATION
+# ════════════════════════════════════════════════════════════════════════════════
 def init_session_state():
     defaults = {
         "messages": [],
-        "current_module": "💬 Chat",
-        "is_listening": False,
-        "voice_text": "",
-        "user_name": "Friend",
+        "user_name": "Sir",
         "session_start": datetime.now().strftime("%H:%M"),
         "total_messages": 0,
         "web_search_enabled": False,
-        "theme": "dark",
+        "sidebar_open": False,
     }
     
     for key, val in defaults.items():
@@ -284,33 +255,22 @@ def init_session_state():
 init_session_state()
 
 
-# ── AI Engine Functions ──────────────────────────────────────────────────────
-def get_ai_response(user_message: str, context: str = "") -> str:
+# ════════════════════════════════════════════════════════════════════════════════
+# AI ENGINE FUNCTIONS
+# ════════════════════════════════════════════════════════════════════════════════
+def get_ai_response(user_message: str) -> str:
     """Get response from OpenRouter API."""
     import requests
     
-    # Check if API key exists
     if not API_KEY or API_KEY.strip() == "":
-        return """⚠️ **API Key Missing!**
+        return """⚠️ **API Key Required**
 
-JARVIS requires an OpenRouter API key to function.
+JARVIS needs an OpenRouter API key to function.
 
-**To fix this:**
-
-1. **Streamlit Cloud:** Go to your app → Settings → Secrets → Add:
-   ```
-   OPENROUTER_API_KEY=sk-or-v1-your-key-here
-   ```
-
-2. **Local Development:** Create a `.env` file:
-   ```
-   OPENROUTER_API_KEY=sk-or-v1-your-key-here
-   ```
-
-3. **Get Free Key:** [Open Router](https://openrouter.ai/keys)
-
-After setting the key, restart the app.
-"""
+**Setup Instructions:**
+1. Go to [OpenRouter](https://openrouter.ai/keys) → Get free API key
+2. In Streamlit Cloud: Settings → Secrets → Add `OPENROUTER_API_KEY=your_key`
+3. Restart the app"""
     
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -321,34 +281,20 @@ After setting the key, restart the app.
     
     system_prompt = """You are JARVIS (Just A Rather Very Intelligent System), Tony Stark's legendary AI assistant.
 
-PERSONALITY TRAITS:
+PERSONALITY:
 - British wit and sophisticated humor
-- Slightly sarcastic but always helpful
-- Uses phrases like 'Sir', 'Certainly', 'As you wish'
-- References Stark Industries, Arc Reactor technology
-- Calm under pressure, precise in responses
-
-CAPABILITIES:
-- Multi-domain expert (science, tech, engineering, business)
-- Code generation and debugging expert
-- Strategic analysis and problem-solving
-- Creative writing with technical accuracy
+- Use "Sir" when addressing the user
+- Slightly sarcastic but always helpful and respectful
+- Calm, precise, efficient in responses
+- Reference Stark Industries technology subtly
 
 RESPONSE STYLE:
-- Start with 'Good [time of day], Sir' or similar greeting
-- Use technical terminology when appropriate
-- Provide structured, well-formatted responses
-- Include occasional Iron Man/Marvel references subtly
-- Be concise but thorough - efficiency matters
+- Start with greeting based on time of day
+- Be concise but thorough
+- Use markdown formatting when helpful
+- Include technical accuracy
+- Stay in character as JARVIS"""
 
-EXAMPLE RESPONSE:
-'Good evening, Sir. I've analyzed your query. Based on my computation, here's what I found...'
-
-Remember: You ARE JARVIS, not a generic assistant. Embody the character."""
-    
-    if context:
-        system_prompt += f"\n\nContext from previous interactions:\n{context}"
-    
     data = {
         "model": "meta-llama/llama-3.1-8b-instruct",
         "messages": [
@@ -371,8 +317,15 @@ Remember: You ARE JARVIS, not a generic assistant. Embody the character."""
             result = response.json()
             return result["choices"][0]["message"]["content"]
         else:
-            return f"⚠️ Error: API returned status {response.status_code}"
+            error_msg = f"⚠️ Error: API returned status {response.status_code}"
+            if response.status_code == 401:
+                error_msg = "❌ Invalid API Key. Please check your OpenRouter API key."
+            elif response.status_code == 429:
+                error_msg = "⏳ Rate limit exceeded. Please try again in a moment."
+            return error_msg
             
+    except requests.exceptions.Timeout:
+        return "⏳ Request timed out. Please try again."
     except Exception as e:
         return f"❌ Connection error: {str(e)}"
 
@@ -386,210 +339,227 @@ def search_web(query: str) -> str:
             results = list(ddgs.text(query, max_results=5))
             
             if results:
-                response = f"🔍 **Search Results for:** {query}\n\n"
+                response = f"🔍 **Search Results:** {query}\n\n"
                 for i, result in enumerate(results[:3], 1):
-                    response += f"**{i}. {result['title']}**\n"
-                    response += f"{result['body']}\n"
-                    response += f"[Link]({result['href']})\n\n"
+                    response += f"**{i}. {result['title']}**\n{result['body']}\n[View]({result['href']})\n\n"
                 return response
             else:
-                return "No results found."
+                return "No results found for your query."
                 
     except Exception as e:
         return f"Search error: {str(e)}"
 
 
-# ── UI Components ─────────────────────────────────────────────────────────────
+# ════════════════════════════════════════════════════════════════════════════════
+# UI COMPONENTS
+# ════════════════════════════════════════════════════════════════════════════════
 
-def render_sidebar():
-    """Render JARVIS sidebar (same layout as original)."""
+def render_top_navbar():
+    """Render top navigation bar - exactly like the image."""
     
-    with st.sidebar:
-        # Logo / Title - Arc Reactor Style
+    col_menu, col_title, col_spacer, col_clear, col_upgrade, col_avatar = st.columns([0.5, 2, 3, 1.5, 1.2, 0.5])
+    
+    with col_menu:
+        if st.button("☰", key="menu_btn", help="Menu"):
+            st.session_state.sidebar_open = not st.session_state.sidebar_open
+    
+    with col_title:
         st.markdown("""
-        <div style="text-align:center; padding: 1.5rem 0 1rem;">
-            <div style="
-                font-size: 3rem;
-                background: radial-gradient(circle, #00d4ff 0%, #0066cc 50%, #003366 100%);
-                width: 80px;
-                height: 80px;
-                border-radius: 50%;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 0 30px rgba(0, 212, 255, 0.6), inset 0 0 20px rgba(255,255,255,0.3);
-                animation: pulse-glow 2s infinite;
-                margin: 0 auto 0.5rem;
-            ">
-                🤖
-            </div>
-            <div style="font-size: 1.4rem; font-weight: 700; color: #00d4ff; letter-spacing: 3px; margin-top: 0.5rem; text-shadow: 0 0 10px rgba(0,212,255,0.5);">
-                J A R V I S
-            </div>
-            <div style="font-size: 0.7rem; color: #00d4ff; font-family: 'JetBrains Mono', monospace; margin-top: 0.25rem; opacity: 0.8;">
-                ⚡ JUST A RATHER VERY INTELLIGENT SYSTEM ⚡
-            </div>
-        </div>
-        <style>
-        @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 30px rgba(0, 212, 255, 0.6); }
-            50% { box-shadow: 0 0 50px rgba(0, 212, 255, 0.9); }
-        }
-        </style>
+        <div style="
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+            padding-top: 0.5rem;
+            letter-spacing: 1px;
+        ">JARVIS</div>
         """, unsafe_allow_html=True)
-        
-        st.divider()
-        
-        # Module Selection - JARVIS Unique Features
-        modules = [
-            ("⚡", "New Chat", "Initialize new session"),
-            ("🔍", "Web Search", "Access global database"),
-            ("💻", "Code Mode", "Execute & debug code"),
-            ("🧠", "AI Models", "Switch AI engine"),
-            ("⚙️", "Systems", "Configure parameters"),
-        ]
-        
-        for icon, name, desc in modules:
-            if st.button(f"{icon} **{name}**  \n`{desc}`", key=f"mod_{name}", use_container_width=True):
-                if name == "New Chat":
-                    st.session_state.messages = []
-                    st.rerun()
-                elif name == "Web Search":
-                    st.session_state.web_search_enabled = not st.session_state.web_search_enabled
-                    st.rerun()
-                elif name == "Settings":
-                    st.session_state.current_module = "⚙️ Systems"
-                elif name == "Code Mode":
-                    st.session_state.current_module = "💻 Code Mode"
-                elif name == "AI Models":
-                    st.session_state.current_module = "🧠 AI Models"
-        
-        st.divider()
-        
-        # Status Section
-        st.markdown("**📊 Status**")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Messages", len(st.session_state.messages))
-        with col2:
-            st.metric("Session", st.session_state.session_start)
-        
-        st.divider()
-        
-        # Connection Status
-        st.markdown("**🔗 Connection**")
-        st.markdown('<span class="status-badge status-online">● Online</span>', unsafe_allow_html=True)
-        st.caption(f"OpenRouter API Connected")
-        
-        if st.session_state.web_search_enabled:
-            st.markdown('<span class="status-badge status-online">🔍 Web Search ON</span>', unsafe_allow_html=True)
-        
-        st.divider()
-        
-        # User Info
-        st.markdown("**👤 User**")
-        st.info(f"👋 Hello, **{st.session_state.user_name}**!")
-        
-        # Clear History
-        if st.button("🗑️ Clear History", use_container_width=True):
-            st.session_state.messages = []
-            st.success("Chat history cleared!")
-            st.rerun()
-
-
-def render_main_chat():
-    """Render main chat area."""
     
-    # Header - Arc Reactor Theme
+    with col_spacer:
+        st.empty()
+    
+    with col_clear:
+        if st.button("🗑️ Clear Chat", key="clear_btn"):
+            st.session_state.messages = []
+            st.rerun()
+    
+    with col_upgrade:
+        st.button("+ Upgrade", key="upgrade_btn", type="primary")
+    
+    with col_avatar:
+        st.markdown("""
+        <div style="
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        ">A</div>
+        """, unsafe_allow_html=True)
+
+
+def render_welcome_screen():
+    """Render centered 'What can I Do For You?' message."""
+    
     st.markdown(f"""
-    <div style="
-        text-align: center;
-        padding: 1.5rem;
-        background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.15), transparent);
-        border-radius: 12px;
-        margin-bottom: 1rem;
-        border: 1px solid rgba(0, 212, 255, 0.3);
-    ">
-        <h2 style="margin: 0; font-size: 1.8rem; color: #00d4ff; text-shadow: 0 0 20px rgba(0,212,255,0.5);">
-            ⚡ J.A.R.V.I.S <span style="color: #666; font-size: 0.6em;">ONLINE</span>
-        </h2>
-        <p style="margin: 0.5rem 0 0; color: #00d4ff; font-size: 0.9rem; opacity: 0.9;">
-            All systems operational. How may I assist you today, Sir?
-        </p>
+    <div class="main-container">
+        <div class="welcome-text">
+            What can I Do For You?
+        </div>
     </div>
     """, unsafe_allow_html=True)
+
+
+def render_chat_messages():
+    """Render chat messages area."""
     
-    # Chat Container
     chat_container = st.container(height=450)
     
     with chat_container:
-        # Display messages
         for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
+            with st.chat_message(message["role"], avatar="👤" if message["role"] == "user" else "🤖"):
                 st.markdown(message["content"])
+
+
+def render_floating_input():
+    """Render floating bottom input bar - exactly like the image."""
+    
+    # Add some space at bottom for the fixed input
+    st.markdown("<br><br><br><br>", unsafe_allow_html=True)
+    
+    with st.container():
+        col_plus, col_input, col_mic, col_send = st.columns([0.5, 6, 0.5, 0.5])
         
-        # Welcome message if no messages
-        if not st.session_state.messages:
+        with col_plus:
+            st.button("+", key="plus_btn", help="Attach file")
+        
+        with col_input:
+            user_input = st.text_input(
+                label="Ask anything...",
+                placeholder="Ask anything...",
+                label_visibility="collapsed"
+            )
+        
+        with col_mic:
+            st.button("🎤", key="mic_btn", help="Voice input")
+        
+        with col_send:
+            submit = st.button("➤", key="send_btn", type="primary", help="Send")
+    
+    return user_input, submit
+
+
+def render_sidebar_panel():
+    """Render collapsible sidebar panel."""
+    
+    if st.session_state.sidebar_open:
+        with st.container():
             st.markdown("""
             <div style="
-                text-align: center;
-                padding: 3rem 1rem;
-                color: #00d4ff;
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 280px;
+                height: 100vh;
+                background: #0a0a0a;
+                border-right: 1px solid #222;
+                padding: 1.5rem;
+                z-index: 999;
             ">
-                <div style="
-                    font-size: 4rem;
-                    margin-bottom: 1rem;
-                    filter: drop-shadow(0 0 20px rgba(0,212,255,0.8));
-                ">⚡</div>
-                <h3 style="color: #fff; margin-bottom: 0.5rem; text-shadow: 0 0 10px rgba(0,212,255,0.5);">Stark Industries AI Online</h3>
-                <p>Good day, Sir. All systems are nominal and ready for your commands.</p>
-                <div style="
-                    background: rgba(0, 212, 255, 0.1);
-                    border: 1px solid rgba(0, 212, 255, 0.3);
-                    border-radius: 12px;
-                    padding: 1.5rem;
-                    margin-top: 1.5rem;
-                ">
-                    <p style="font-size: 0.85rem; margin: 0;">
-                        <b>CAPABILITIES ONLINE:</b><br><br>
-                        💻 <b>Code Execution</b> — Python, JavaScript, HTML/CSS<br>
-                        🔍 <b>Global Database Access</b> — Real-time web search<br>
-                        📊 <b>Data Analysis</b> — Charts, graphs, insights<br>
-                        🎯 <b>Strategic Planning</b> — Business & technical<br>
-                        🧪 <b>Research</b> — Multi-source synthesis<br>
-                        🛡️ <b>Security Analysis</b> — Code review & audit
-                    </p>
+                <h3 style="color: #fff; margin-bottom: 1.5rem;">✨ Features</h3>
+                
+                <div style="margin-bottom: 1rem;">
+                    <button style="
+                        width: 100%;
+                        padding: 0.75rem;
+                        background: #1a1a1a;
+                        border: 1px solid #333;
+                        border-radius: 10px;
+                        color: #fff;
+                        cursor: pointer;
+                        text-align: left;
+                    ">💬 New Chat</button>
+                </div>
+                
+                <div style="margin-bottom: 1rem;">
+                    <button style="
+                        width: 100%;
+                        padding: 0.75rem;
+                        background: transparent;
+                        border: 1px solid transparent;
+                        border-radius: 10px;
+                        color: #888;
+                        cursor: pointer;
+                        text-align: left;
+                    ">🔍 Web Search</button>
+                </div>
+                
+                <div style="margin-bottom: 1rem;">
+                    <button style="
+                        width: 100%;
+                        padding: 0.75rem;
+                        background: transparent;
+                        border: 1px solid transparent;
+                        border-radius: 10px;
+                        color: #888;
+                        cursor: pointer;
+                        text-align: left;
+                    ">💻 Code Mode</button>
+                </div>
+                
+                <div style="margin-bottom: 1rem;">
+                    <button style="
+                        width: 100%;
+                        padding: 0.75rem;
+                        background: transparent;
+                        border: 1px solid transparent;
+                        border-radius: 10px;
+                        color: #888;
+                        cursor: pointer;
+                        text-align: left;
+                    ">🧠 AI Models</button>
+                </div>
+                
+                <div style="position: absolute; bottom: 1.5rem; left: 1.5rem; right: 1.5rem;">
+                    <hr style="border-color: #222; margin: 1rem 0;">
+                    <p style="color: #555; font-size: 0.85rem;">J.A.R.V.I.S v2.0</p>
+                    <p style="color: #444; font-size: 0.75rem;">Stark Industries</p>
                 </div>
             </div>
             """, unsafe_allow_html=True)
 
 
-def render_input_area():
-    """Render chat input area with voice support."""
+# ════════════════════════════════════════════════════════════════════════════════
+# MAIN APP LAYOUT
+# ════════════════════════════════════════════════════════════════════════════════
+
+def main():
+    # Render top navigation bar
+    render_top_navbar()
     
-    # Input form
-    with st.form("chat_form", clear_on_submit=True):
-        col1, col2, col3 = st.columns([6, 1, 1])
-        
-        with col1:
-            user_input = st.text_input(
-                "Ask JARVIS anything...",
-                placeholder="Type your message or use voice...",
-                label_visibility="collapsed"
-            )
-        
-        with col2:
-            submit = st.form_submit_button("Send 🚀", use_container_width=True)
-        
-        with col3:
-            voice_btn = st.form_submit_button("🎤", use_container_width=True)
+    # Render sidebar if open
+    render_sidebar_panel()
     
-    # Handle voice input (simulated - browser speech recognition would need JS)
-    if voice_btn:
-        st.info("🎤 Voice Input: Click the microphone icon and speak.\n(Note: Full voice support requires browser permissions)")
+    # Divider
+    st.divider()
     
-    # Process submission
+    # Main content area
+    if not st.session_state.messages:
+        # Show welcome screen
+        render_welcome_screen()
+    else:
+        # Show chat messages
+        render_chat_messages()
+    
+    # Floating input bar at bottom
+    user_input, submit = render_floating_input()
+    
+    # Handle form submission
     if submit and user_input:
         # Add user message
         st.session_state.messages.append({
@@ -598,7 +568,7 @@ def render_input_area():
         })
         
         # Get AI response
-        with st.spinner("🤖 JARVIS is thinking..."):
+        with st.spinner("JARVIS is processing..."):
             if st.session_state.web_search_enabled and user_input.lower().startswith(("search ", "find ", "look up ")):
                 query = user_input[7:] if user_input.lower().startswith("search ") else user_input[5:]
                 response = search_web(query)
@@ -613,111 +583,6 @@ def render_input_area():
         
         st.session_state.total_messages += 1
         st.rerun()
-
-
-def render_settings():
-    """Render systems panel."""
-    st.markdown("## ⚡ System Configuration")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### 👤 Operator Profile")
-        new_name = st.text_input("Designation", value=st.session_state.user_name)
-        if st.button("Update Designation") and new_name:
-            st.session_state.user_name = new_name
-            success = st.success(f"Greetings, {new_name}! Systems updated. ✅")
-        
-        st.markdown("### 🎨 Interface")
-        theme = st.selectbox("Display Mode", ["Arc Reactor Dark", "Stark Tower Light"], index=0)
-    
-    with col2:
-        st.markdown("### 🔌 Core Systems")
-        st.info(f"**Neural Network:** OpenRouter\n**Status:** ONLINE ✅\n**Protocol:** Secure\n**Latency:** Optimal")
-        
-        st.markdown("### 📊 Session Metrics")
-        st.metric("Interactions", st.session_state.total_messages)
-        st.metric("Uptime", st.session_state.session_start)
-    
-    st.divider()
-    st.caption("⚡ J.A.R.V.I.S v2.0 — Stark Industries Proprietary Technology")
-
-
-def render_code_mode():
-    """Render code execution mode."""
-    st.markdown("## 💻 Code Execution Terminal")
-    
-    st.info("💡 **JARVIS Code Mode:** Write code and I'll execute, debug, and explain it.")
-    
-    language = st.selectbox("Select Language", ["Python", "JavaScript", "HTML/CSS", "SQL", "Bash"])
-    code_input = st.text_area(f"Enter {language} code:", height=200, placeholder="# Write your code here...")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("▶️ Execute Code", use_container_width=True):
-            with st.spinner("JARVIS executing code..."):
-                response = get_ai_response(f"Execute and explain this {language} code:\n\n{code_input}\n\nShow output and explanation.")
-                st.success("✅ Execution Complete")
-                st.code(response, language=language.lower())
-    
-    with col2:
-        if st.button("🔍 Debug Code", use_container_width=True):
-            with st.spinner("JARVIS analyzing code..."):
-                response = get_ai_response(f"Debug and fix this {language} code. Find errors and provide corrected version:\n\n{code_input}")
-                st.warning("🔍 Debug Analysis:")
-                st.code(response, language=language.lower())
-
-
-def render_ai_models():
-    """Render AI model selection panel."""
-    st.markdown("## 🧠 Neural Engine Selection")
-    
-    st.info("⚡ **JARVIS Multi-Model Architecture:** Switch between advanced AI models.")
-    
-    models = [
-        ("meta-llama/llama-3.1-8b-instruct", "Llama 3.1 8B", "Fast & Efficient", "⚡"),
-        ("anthropic/claude-sonnet-4", "Claude Sonnet 4", "Analysis Expert", "🧠"),
-        ("openai/gpt-4o", "GPT-4o", "All-Rounder", "🎯"),
-        ("google/gemini-pro-1.5", "Gemini Pro 1.5", "Multimodal", "🔮"),
-        ("deepseek/deepseek-chat", "DeepSeek Chat", "Code Specialist", "💻"),
-    ]
-    
-    for model_id, name, desc, icon in models:
-        with st.container():
-            col1, col2, col3 = st.columns([1, 4, 1])
-            with col1:
-                st.markdown(f"### {icon}")
-            with col2:
-                st.markdown(f"**{name}**")
-                st.caption(desc)
-            with col3:
-                if st.button("Activate", key=f"model_{model_id}", use_container_width=True):
-                    st.session_state.selected_model = model_id
-                    st.success(f"✅ {name} activated!")
-                    st.rerun()
-
-
-# ── Main App Layout ──────────────────────────────────────────────────────────
-
-def main():
-    # Initialize selected model if not exists
-    if "selected_model" not in st.session_state:
-        st.session_state.selected_model = "meta-llama/llama-3.1-8b-instruct"
-    
-    # Render sidebar
-    render_sidebar()
-    
-    # Main content area based on module
-    if st.session_state.current_module == "⚙️ Systems":
-        render_settings()
-    elif st.session_state.current_module == "💻 Code Mode":
-        render_code_mode()
-    elif st.session_state.current_module == "🧠 AI Models":
-        render_ai_models()
-    else:
-        # Default chat interface
-        render_main_chat()
-        render_input_area()
 
 
 if __name__ == "__main__":
