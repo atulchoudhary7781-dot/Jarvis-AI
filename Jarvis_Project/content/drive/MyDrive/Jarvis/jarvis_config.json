@@ -1,0 +1,19 @@
+# jarvis_config.json - Configuration file for JARVIS Voice Activation Service
+
+{
+  "light_type": "generic",
+  "wake_words": [
+    "hey jarvis",
+    "jarvis activate",
+    "activate jarvis",
+    "jarvis"
+  ],
+  "mic_sensitivity": 4000,
+  "speak_activation": true,
+  "light_on_activation": true,
+  "hue_ip": "192.168.1.100",
+  "serial_port": "COM3",
+  "default_light_color": "blue",
+  "activation_light_duration": 3.0,
+  "listening_light_effect": "breathing"
+}
