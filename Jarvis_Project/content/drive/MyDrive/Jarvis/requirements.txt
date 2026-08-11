@@ -1,0 +1,10 @@
+customtkinter
+flet
+groq
+openai
+python-dotenv
+ddgs
+pyautogui
+pyttsx3
+SpeechRecognition
+pillow

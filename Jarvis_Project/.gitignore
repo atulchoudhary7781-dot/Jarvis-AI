@@ -1,0 +1,8 @@
+# Secret API keys and environment files
+*.env
+api_key.env
+
+# Python folders
+venv/
+.venv/
+__pycache__/

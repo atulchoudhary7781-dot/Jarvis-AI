@@ -1,0 +1,38 @@
+# jarvis_enhancements_requirements.txt
+# Additional dependencies for JARVIS enhancement features
+
+# Document Q&A & RAG
+pdfplumber>=0.10.0          # PDF text extraction
+python-docx>=0.8.11         # DOCX file handling
+sentence-transformers>=2.0.0 # Semantic embeddings
+
+# System Automation
+pyautogui>=0.9.53           # Cross-platform GUI automation
+
+# Image Generation
+openai>=1.0.0               # DALL-E API integration
+Pillow>=10.0.0              # Image editing (PIL)
+groq>=0.9.0                 # Groq LPU inference API
+requests>=2.31.0            # HTTP requests for Hugging Face APIs
+
+# Scheduling
+schedule>=1.2.0             # Alternative scheduling library (optional)
+
+# Voice Activation & Lights (NEW)
+SpeechRecognition>=3.10.0   # Voice recognition
+pyttsx3>=2.90               # Text-to-speech
+pyaudio>=0.2.13             # Microphone input
+pyserial>=3.5               # Serial communication for Arduino/RGB
+phue>=1.2.2                 # Philips Hue lights control
+lifxlan>=1.2.11             # LIFX smart lights control
+
+# Code Sandbox
+# No additional requirements - uses built-in subprocess
+
+# UI & Other
+customtkinter>=5.0          # Modern UI framework (may need upgrade)
+
+# Optional: For advanced features
+numpy>=1.24.0               # Array operations (used in embedding similarity)
+faiss-cpu>=1.7.0            # High-performance vector search (optional, for improved RAG)
+huggingface-hub>=0.19.0     # Hugging Face model access
