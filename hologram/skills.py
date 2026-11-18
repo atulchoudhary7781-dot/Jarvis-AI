@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 import threading
 import time
@@ -23,6 +24,9 @@ from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from xml.etree import ElementTree as ET
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from .chat import TERMS
+from .chat import engine as companion
 
 MAX_QUERY = 360
 AGENT = (
@@ -526,7 +530,7 @@ def ask_provider(q, lang, history, key, model):
     messages = [
         {
             "role": "system",
-            "content": "You are JARVIS, a calm, precise personal voice assistant. Answer in "
+            "content": "You are Jarvis, an AI voice companion. Speak like a thoughtful friend: respond to the specific thing said, offer a concrete idea when useful, and do not pretend to be human. Answer in "
             + ("natural Hindi" if lang.startswith("hi") else "English")
             + ". Answer in two to four short spoken sentences. No markdown. You have no tools: never claim to perform actions, browse, or have fresh facts. For live weather or time suggest the built-in city command. Be honest if you do not know.",
         }
@@ -561,6 +565,7 @@ def answer(
     search_key="",
     model="openrouter/auto",
     now=None,
+    chat_terms=None,
 ):
     lang = "hi-IN" if str(language).startswith("hi") else "en-IN"
     if not isinstance(query, str) or not 0 < len(query.strip()) <= MAX_QUERY:
@@ -569,6 +574,33 @@ def answer(
     w = WEATHER.search(q)
     t = TIME.search(q)
     d = DATE.search(q)
+    story = bool(
+        re.match(
+            r"^(?:i(?:'m|'ve|'d)? |we |my (?:friend|family|day|first|date) |today i |maine |aaj maine |मैंने |आज मैंने |हमने |मेरा दोस्त )",
+            q,
+        )
+    )
+    request = bool(
+        re.search(
+            r"(?:want to know|batao|बताओ|जानना|tell me|what time|weather (?:in|for)|time (?:in|for))",
+            q,
+        )
+    )
+    if story and not request:
+        w = t = d = None
+        pending = ""
+    if (
+        pending == "weather"
+        and not (w or t or d)
+        and (
+            len(q.split()) > 5
+            or len(q) > 60
+            or re.search(
+                r"[<@:/]|(?<!\w)(?:why|how|what|hello|help|you|i|क्यों|मुझे|तुम|मेरा|कैसे)(?!\w)", q
+            )
+        )
+    ):
+        pending = ""
     source = "lookup"
     try:
         broad_news = (
@@ -661,10 +693,18 @@ def answer(
             "नमस्कार",
             "what can you do",
         }:
+            if q in {"help", "commands", "madad", "मदद", "कमांड", "what can you do"}:
+                return reply(
+                    "We can chat, look something up, or make a shortcut together. What sounds good?",
+                    "बात करें, कुछ पता लगाएँ या नया शॉर्टकट बनाएँ? आज क्या करने का मन है?",
+                    lang,
+                    source="Built-in chat",
+                )
             return reply(
-                "I am listening. Ask for the time in Tokyo, the weather in Delhi, or a Wikipedia topic. You can ask another question when I finish.",
-                "मैं तैयार हूँ। टोक्यो का समय, दिल्ली का मौसम या विकिपीडिया पर कोई विषय पूछिए। मेरे जवाब के बाद अगला सवाल पूछिए।",
+                "Hey! How has your day been?",
+                "अरे, कैसे हो? आज का दिन कैसा रहा?",
                 lang,
+                source="Built-in chat",
             )
         explicit = (
             bool(re.match(r"^(?:search|look\s*up|wikipedia|विकिपीडिया|खोजो)\b", q))
@@ -674,23 +714,39 @@ def answer(
             source = "OpenRouter"
             return ask_provider(q, lang, history, key, model)
         topic = get_topic(q)
+        # Only clearly requested public facts go to an encyclopedia. Ordinary
+        # personal conversation is never used as a third-party search query.
+        factual = re.match(
+            r"^(?:who (?:is|was|are)|what (?:is|was|are)|tell me about|explain) ", q
+        ) or re.search(
+            r" (?:ke|के) (?:baare|bare|बारे) (?:mein|me|में)| (?:kaun|kya|कौन|क्या) (?:hai|है)$", q
+        )
+        personal = re.search(
+            r"(?<!\w)(?:my|me|your|our|i|you|we|मेरा|मेरी|मुझे|तुम|तुम्हारा|आप|mera|meri|tum)(?!\w)", q
+        )
         if topic and (
             explicit
-            or topic != q
-            or (
-                len(q.split()) <= 7
-                and not re.match(
-                    r"^(?:open |send |run |turn |delete |install |make |write |create |set |book |buy |खोल|भेज)",
-                    q,
-                )
-            )
+            or (factual and not personal)
+            or (q.startswith("tell me about ") and not re.search(r"\b(?:my|your|our)\b", topic))
         ):
             source = "Wikipedia"
             return wiki(topic, lang)
+        if os.environ.get("JARVIS_CHAT_MODEL") and chat_terms != TERMS:
+            return reply(
+                "For open chat I use Gemma. Its terms and use restrictions are at slash terms; press L to read them. Do you agree for this tab?",
+                "खुली बातचीत के लिए जेम्मा की शर्तें लागू हैं। इन्हें स्लैश टर्म्स पर पढ़ सकते हो, या एल दबाओ। इस टैब के लिए मंज़ूर है?",
+                lang,
+                source="Chat terms",
+                terms=TERMS,
+            )
+        generated = companion.respond(query, lang, history)
+        if generated:
+            return generated
         return reply(
-            "This mode handles public facts, city time and weather. For example: search Wikipedia for the Moon. General conversation needs private AI setup.",
-            "इस मोड में सार्वजनिक जानकारी, समय और मौसम पूछ सकते हैं। जैसे, चंद्रयान के बारे में बताओ। खुली बातचीत के लिए निजी ए आई सेटअप चाहिए।",
+            "I’m here. My open-ended chat is taking a break, but we can still play a riddle, try a creative prompt, or make a shortcut together.",
+            "सुन रहा हूँ। अभी खुलकर बातचीत वाला हिस्सा उपलब्ध नहीं है। चलो पहेली खेलें, कोई नया आइडिया सोचें या शॉर्टकट बनाएँ?",
             lang,
+            source="Built-in chat",
         )
     except (
         HTTPError,

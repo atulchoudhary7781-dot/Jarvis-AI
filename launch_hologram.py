@@ -11,6 +11,7 @@ import webbrowser
 from pathlib import Path
 
 from hologram import voice
+from hologram.chat import TERMS
 from hologram.server import make_server
 from hologram.skills import answer
 
@@ -76,6 +77,11 @@ def main(argv=None):
     ap.add_argument(
         "--ask", help="test a spoken information query as text, without launching a window"
     )
+    ap.add_argument(
+        "--accept-chat-terms",
+        action="store_true",
+        help="for --ask only: accept the Gemma terms in hologram/licenses/gemma-TERMS.txt",
+    )
     ap.add_argument("--lang", choices=["hi", "en"], default="hi")
     ap.add_argument("--zone", default="UTC", help="IANA timezone for a local-time CLI question")
     args = ap.parse_args(argv)
@@ -84,6 +90,7 @@ def main(argv=None):
             args.ask,
             args.lang,
             args.zone,
+            chat_terms=TERMS if args.accept_chat_terms else None,
             key="" if args.preview else os.environ.get("OPENROUTER_API_KEY", ""),
             search_key="" if args.preview else os.environ.get("BRAVE_SEARCH_API_KEY", ""),
             model=os.environ.get("OPENROUTER_MODEL", "openrouter/auto"),

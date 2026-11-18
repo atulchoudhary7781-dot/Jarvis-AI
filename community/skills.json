@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "phrase": "city duet",
+      "steps": [
+        {
+          "kind": "time",
+          "city": "Delhi"
+        },
+        {
+          "kind": "time",
+          "city": "London"
+        }
+      ]
+    },
+    {
+      "phrase": "focus sprint",
+      "steps": [
+        {
+          "kind": "timer",
+          "minutes": 20
+        }
+      ]
+    },
+    {
+      "phrase": "दिल्ली की सुबह",
+      "steps": [
+        {
+          "kind": "date",
+          "city": "Delhi"
+        },
+        {
+          "kind": "weather",
+          "city": "Delhi"
+        }
+      ]
+    },
+    {
+      "phrase": "planet pop quiz",
+      "steps": [
+        {
+          "kind": "quiz",
+          "question": "Which planet is famous for its Great Red Spot?",
+          "answer": "Jupiter"
+        }
+      ]
+    }
+  ]
+}

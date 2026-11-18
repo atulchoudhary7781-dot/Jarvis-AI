@@ -1,0 +1,5 @@
+Gemma is provided under and subject to the Gemma Terms of Use found at gemma.ai/resources/terms
+
+Upstream: google/gemma-3-1b-it (Google). Q4_K_M GGUF conversion: ggml-org.
+JARVIS uses the published quantization without modifying the weights.
+See gemma-TERMS.txt and deploy/prepare_chat.py for license, revision and integrity details.

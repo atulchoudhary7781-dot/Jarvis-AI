@@ -13,6 +13,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import voice
+from .catalog import Catalog
 from .skills import MAX_QUERY, RateLimit, answer, reply
 
 UI = Path(__file__).parent / "ui" / "index.html"
@@ -39,6 +40,9 @@ def make_server(port=8765, *, preview=False):
     csp = f"default-src 'none'; script-src 'sha256-{digest}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; media-src blob: data:; base-uri 'none'; form-action 'none'"
     if not preview:
         csp += "; frame-ancestors 'self'"
+    terms_path = Path(__file__).parent / "licenses" / "gemma-TERMS.txt"
+    catalog = Catalog()
+    sync_catalog = os.environ.get("JARVIS_COMMUNITY_SYNC", "").strip() == "1"
     limit = RateLimit(35 if preview else 24)
     slots = threading.BoundedSemaphore(6)
     voice_limit = RateLimit(55, 60)
@@ -49,7 +53,7 @@ def make_server(port=8765, *, preview=False):
     model = "openrouter/auto" if preview else os.environ.get("OPENROUTER_MODEL", "openrouter/auto")
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "Amber/2"
+        server_version = "Amber/3"
         sys_version = ""
 
         def log_message(self, fmt, *args):
@@ -75,6 +79,7 @@ def make_server(port=8765, *, preview=False):
             self.send_response(code)
             self.send_header("Content-Type", kind)
             self.send_header("Content-Length", str(len(data)))
+            self.send_header("Link", '</terms>; rel="terms-of-service"')
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
@@ -103,6 +108,10 @@ def make_server(port=8765, *, preview=False):
             path = urlsplit(self.path).path
             if path in ("/", "/index.html"):
                 return self.write_reply(200, body, "text/html; charset=utf-8")
+            if path == "/api/community-skills":
+                return self.out(200, catalog.read(sync_catalog))
+            if path == "/terms" and terms_path.is_file():
+                return self.write_reply(200, terms_path.read_bytes(), "text/plain; charset=utf-8")
             if path == "/health":
                 return self.out(200, {"ok": True, "mode": "public-preview" if preview else "local"})
             if path == "/favicon.ico":
@@ -175,6 +184,7 @@ def make_server(port=8765, *, preview=False):
                     req.get("zone", "UTC"),
                     pending=req.get("pending", ""),
                     history=history,
+                    chat_terms=req.get("chatTerms"),
                     key=ai_key,
                     search_key=search_key,
                     model=model,

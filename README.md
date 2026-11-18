@@ -1,52 +1,79 @@
-# J.A.R.V.I.S. — Golden hologram
+# J.A.R.V.I.S. · Amber Companion
 
-Kaali screen par sirf ek sunehra 3D hologram. **Ek baar on karo, phir baat karte raho.** Jawaab bolte waqt baahari paratein alag hokar khulti hain, beech ka iris nazar aata hai aur awaaz ke utaar-chadhaav ke saath roshni badalti hai. Baat khatam hone par gola dobara judta hai. Koi button, transcript, menu ya dashboard nahi.
+**[Open the live hologram →](https://jarvis-ai-bay-one.vercel.app/)** · [Teach a skill](#teach-jarvis-something) · [Community contributions](CONTRIBUTING.md) · [Run it yourself](#run-it-yourself)
 
-## Sabse pehle aise try karo
+JARVIS is a voice companion for Hindi and English. There is no chat window: a golden mechanical core opens while JARVIS speaks, closes when it finishes, and listens for your next turn. Tell it about your day, ask it to invent something, or teach it a shortcut you want to use tomorrow.
 
-1. **Windows, enhanced male voice:** ZIP extract karo aur **`Start Enhanced JARVIS.cmd`** double-click karo. 64-bit Python **3.12** recommended (3.10–3.13 supported). Pehli baar yeh permission lekar ek alag Python environment mein speech engine install karega. Pehle enhanced start par host lagbhag **94 MB** ke verified voice/model files download karta hai. Uske baad unhe baar-baar download nahi karna padta. Agli baar isi launcher ya `Start Hologram.bat` se khol sakte ho.
-2. **Core par ek baar tap karo** ya **Space** dabao aur browser ko mic ki permission do. Bolo: **“Jarvis, Tokyo mein kitne baje hain?”** Jab jawab khatam ho, seedha bolo: **“Aur London mein?”** Wake word ya doosra tap zaroori nahi. JARVIS apna jawab dete waqt mic nahi chalata.
-3. **“Jarvis, mic band karo”**, **Esc**, ya core par dobara tap conversation band karta hai. Tab chhodne par bhi mic band hota hai; wapas aane par bina aapki marzi ke shuru nahi hota. Yeh foreground conversation hai, background mein chhupa hua listener nahi.
+[![The golden hologram unfolding during speech, captured from the app](docs/amber-core.webp)](https://jarvis-ai-bay-one.vercel.app/)
 
-**Mic ke bina awaaz aur animation check karne ke liye `V` dabao.** Hindi default hai; **E** English, **H** Hindi. Enhanced mode mein asli neural synthesis hoti hai: Hindi ke liye `hm_omega`, English ke liye `bm_george`. Yeh stock masculine voices hain, kisi actor ki recording ya clone nahi. Model warm ho raha ho, download fail ho, ya host busy ho to app matching device voice use karta hai; us fallback mein male voice ki availability aapke browser par depend karti hai.
+## Your first minute
 
-**Preview mein mic block ho?** Live app ko apne **alag HTTPS tab** mein Chrome ya Edge se kholo (local launcher `localhost` bhi theek hai). Browser/OS mic permission aur output volume check karo. File viewer mein khula hua HTML live app nahi hai. Browser ka permission dialog aur mic indicator normal hain; JARVIS unhe hide nahi karta.
+1. Open **[the live site](https://jarvis-ai-bay-one.vercel.app/)** in its own tab. Tap the core once or press **Space**, then allow microphone access. Start with **“नमस्ते”**. Hindi is the default; say **“speak in English”** to switch.
+2. Talk normally. Try **“आज पहली बार मैंने गिटार बजाया”** or **“Invent a tiny animal that lives in a pencil case.”** Ask a follow-up after the reply. On the first open-ended question, JARVIS asks whether you accept the [open-chat terms](https://jarvis-ai-bay-one.vercel.app/terms) for this tab. Say yes to continue with your original question. Basic conversation, public lookups and notebook skills do not require model chat.
+3. Say **“surprise me”** for a creative prompt, or **“पहेली सुनाओ”** and then **“इशारा दो”** for a riddle and a hint. If you repeat a supported city lookup, JARVIS can suggest turning it into a shortcut. Say **“suggestions off”** to stop these offers.
+4. Say **“माइक बंद करो”**, tap the core again, or press **Esc** to stop. The mic is released while JARVIS is thinking or speaking. Leaving the tab disarms it; coming back does not silently reactivate it.
 
-### macOS / Linux
+Chrome or Edge in a standalone HTTPS tab is a good starting point. Recognition and microphone permissions vary by browser and OS. Press **V** to hear the voice without the mic, or **T** to type a turn and **Enter** to send it. Typed input is intentionally invisible to preserve the hologram-only display.
 
-64-bit Python 3.12 aur supported wheels waale host par extracted folder mein:
+## Teach JARVIS something
+
+| What you want | What to say | What happens |
+| --- | --- | --- |
+| A personal routine | **“When I say match day, then time in London.”** | JARVIS reads the action back. Say **“yes”** to save it; later, just say **“match day.”** |
+| A Hindi shortcut | **“जब मैं सुबह की घंटी बोलूँ तो दिल्ली का समय।”** | Confirm with **“हाँ”**, then run it by name. For guided teaching, start with **“नया शॉर्टकट”**. |
+| A practice question | **“Teach a quiz.”** | Give the quiz a name, a question and a short answer. Confirm to save it. Say its name later and JARVIS checks your answer. |
+| A nickname | **“Call me Sky.”** | Only an explicit confirmation saves the name. **“Forget my name”** removes it. |
+| Reviewed skills from other people | **“Community skills”**, then **“city duet”** or **“planet pop quiz.”** | Runs an entry from the shared catalog. New proposals do not go live until a maintainer reviews and merges them. |
+| Memory controls | **“My shortcuts”**, **“forget shortcut match day”**, or **“forget everything.”** | List saved routines, delete one, or clear the entire local notebook after confirmation. |
+
+Up to **24 personal recipes** are stored in this browser, not in a cloud profile. A recipe can combine two city/headline lookups, start one timer, or teach a single quiz card. It cannot install software or run code. If site storage is blocked, JARVIS tells you that a new recipe lasts only for the open page.
+
+**Share only what you choose.** Say **“share skill match day.”** After your confirmation the mic switches off. Tap the core or press **S** to review the public GitHub draft. Nothing is posted by the app. The chat model is not continuously retrained on conversations; personal learning and community publishing are separate. [How review works →](CONTRIBUTING.md)
+
+## Public information and controls
+
+- **World clocks and dates:** “Time in Tokyo” → “What about London?” Uses IANA time zones and daylight-saving rules. The short city follow-up lasts about two minutes.
+- **Weather:** “Weather in Delhi.” Without a city, JARVIS asks for one. Readings come from Open-Meteo; stale readings are identified.
+- **Headlines and reference:** “World headlines” and “Search Wikipedia for the Moon” use BBC feeds and Wikipedia, not a language model guessing today's news.
+- **Timers and movement:** “Set a timer for five minutes,” “cancel timer,” “zoom in” or “reset view.” Timers run in the tab, not after the browser is closed.
+- **Keyboard:** **H / E** select Hindi / English, **V** previews speech, **P** pauses rotation, **F** toggles fullscreen, arrow keys orbit, **L** opens the chat terms. Drag to orbit. The renderer respects reduced-motion preferences.
+
+## How it works
+
+| Layer | Implementation |
+| --- | --- |
+| Hologram and turn-taking | Self-contained HTML, procedural 3D geometry and a playback-driven iris. The controller waits for playback to finish before listening again. |
+| Open conversation | A quantized **Gemma 3 1B IT** runs on the application host using `llama-cpp-python`. It receives the current question and at most two recent conversational exchanges. It generates words, not actions. Like any small model, it can misunderstand or be wrong. |
+| Voice | Stock masculine Kokoro voices: `hm_omega` for Hindi and `bm_george` for English. The host synthesizes speech without a paid TTS API. If the host is warming or busy, the app tries a device voice; its gender and quality depend on the browser. |
+| Personal notebook | Consent-based browser storage for a name, recipes and the shortcut-suggestion preference. No transcript database or background learning service. |
+| Shared catalog | [`community/skills.json`](community/skills.json), validated in Python and the browser. The public host can fetch reviewed changes from this repository's `main`; it keeps a validated bundled copy for outages. |
+
+**Privacy in practice:** the browser or its speech-recognition provider may process microphone audio. Recognized commands and recent chat context go to the JARVIS host when a server answer is needed. Text to be spoken—including a name or recipe read-back—can go to the host for synthesis. Public lookups send lookup data to their providers. The app does not save chat transcripts or speech audio, but browser/provider and hosting policies still apply. Do not use the public demo for secrets. A person using the same browser profile can access saved shortcuts.
+
+## Run it yourself
+
+For the lightweight desktop app, use Python **3.9+**:
 
 ```sh
-python3.12 -m venv .venv
-.venv/bin/python -m pip install -r requirements-voice.txt
-.venv/bin/python launch_hologram.py
+python launch_hologram.py
 ```
 
-**Halka, bina install ka mode:** Windows par `Start Hologram.bat`, ya `python3 launch_hologram.py` (stock Python 3.9+). Neural runtime na ho to system voice milegi; baat karne ka loop aur opening animation wahi rahenge. Terminal ko khula rakho; **Ctrl+C** launcher band karta hai.
+It binds to loopback, opens the hologram and uses device speech if neural voice is not installed. On Windows, `Start Hologram.bat` starts the lightweight version; `Start Enhanced JARVIS.cmd` installs the optional neural voice with your permission. A 64-bit Python **3.12** installation is recommended for local voice and chat. The desktop voice setup does not silently install the chat model.
 
-## Kya pooch sakte ho?
+For **full on-host chat and both neural voices**, use the supplied container:
 
-| Pehla sawaal / order | Phir kya hoga |
-|---|---|
-| “Tokyo mein kitne baje hain?” → “Aur London mein?” | Dono shehron ke local clocks, DST ke saath. City time/date/weather ka chhota follow-up do minute tak samajhta hai. |
-| “Aaj ka mausam batao” → “Delhi” | Agar shehar nahi bataya to JARVIS khud poochta hai; agla jawaab seedha bolo. Open-Meteo reading purani ho to saaf batata hai. |
-| “Duniya ki khabrein sunao” / “World headlines” | BBC Hindi ya BBC World ki do dated headlines. |
-| “Chandrayaan ke baare mein batao” / “Search Wikipedia for the Moon” | Source ke naam ke saath chhota encyclopedia jawab. |
-| “Ek minute ka timer lagao” / “Cancel timer” | Is tab mein ek timer. Naya timer purane ko replace karta hai; device sleep ya background mein der ho sakti hai. |
-| “Zoom in”, “rotate slower”, “reset view” | Seedha 3D hologram badalta hai. |
+```sh
+docker build -f Dockerfile.vercel -t jarvis-amber .
+docker run --rm -p 127.0.0.1:8080:8080 -e PORT=8080 jarvis-amber
+```
 
-### Screen khaali rakhne waale shortcuts
+Open `http://localhost:8080`. The image build downloads and verifies the chat model and voice assets (about **900 MB** before runtime dependencies). The first model reply can take longer; concurrent or unavailable inference falls back to built-in activities rather than inventing a live answer. No private provider key is needed on the public host. See [deployment and native setup](DEPLOYMENT.md) for the optional source build, memory requirements, resource limits and troubleshooting.
 
-- **Tap / Space / Enter:** hands-free session on/off. Jawab ke beech mein bhi tap ya Esc turant rokta hai; mic dobara nahi khulta. Server ko pehle hi mil chuki request wapas nahi li ja sakti.
-- **V:** bina mic ke voice/iris preview. **E / H:** English / Hindi.
-- **Drag / arrows:** orbit. **P:** auto-rotation pause/resume. **F** ya core par **long-press karke chhodo:** full screen.
-- **T → order type karo → Enter:** mic ke bina wahi command; typed input screen par nahi dikhta. Password mat likhna. Touch devices par OS keyboard alag se dikh sakta hai.
-- **O:** configured private Streamlit deployment mein owner sign-in/sign-out. Browser aur hosting platform ke apne dialogs app ke bahar hain.
+## Tests and third-party notices
 
-## Repo aur hosting
+```sh
+python -m unittest discover -s tests -v
+node tests/notebook.cjs
+```
 
-`app.py` ke saath `hologram/`, `requirements.txt` aur `requirements-voice.txt` **repo root** mein rakho. Existing Streamlit app ka target **`main` → `app.py`** hai. Optional private AI (`OPENROUTER_API_KEY`), explicit public-web search (`BRAVE_SEARCH_API_KEY`), verified owner login, privacy, model attribution aur tests: **[DEPLOYMENT.md](DEPLOYMENT.md)**.
-
-Standalone local mode sirf loopback par hai; yeh speaker verification nahi hai. Public preview keys nahi padhta. Private accounts, payments, OS shell ya device-control ka access nahi joda gaya hai. Original full checkout par `python Jarvis_Project/run_jarvis.py --classic` purana Tk mode kholta hai. Is runnable update mein legacy account DB, sessions, credentials, personal photos ya bundled Python nahi hain.
-
-**Security:** Agar GitHub token chat ya repository mein expose hua tha to use revoke karo. Naye secrets chat mein mat bhejo. Asli public checkout ki historic credential/session files ko sirf `.gitignore` se private nahi banaya ja sakta; real secrets rotate aur zaroorat par history clean karo.
+The core tests require no model download, microphone or network credentials. [Deployment notes](DEPLOYMENT.md#verification) cover browser and real-model checks. Gemma is subject to its [terms and use restrictions](hologram/licenses/gemma-TERMS.txt); voice and time-zone notices are in [`hologram/licenses`](hologram/licenses/). The hologram is an original rendering. This project is not affiliated with Marvel, Google or the creators of the named voices.
