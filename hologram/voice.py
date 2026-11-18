@@ -38,8 +38,11 @@ ASSETS = (
         522240,
         "c4b235a4c1f2cd3b939fed08b899ce9385638b763f7b73a59616c4fc9bd6c9bc",
     ),
+    ("voices/hm_psi.bin", 522240, "644daf88ba8aeb7bd08950bbdcd4453bb280864e49dc4df93fabc6be32e03f37"),
+    ("voices/bm_fable.bin", 522240, "f889083196807b4adb15e9204252165f503b8d33d3982e681c52443c49d798f1"),
 )
-SPEAKERS = {"hi-IN": ("hm_omega", "hi"), "en-IN": ("bm_george", "en-gb")}
+SPEAKERS = {"hi-IN": ("amber_dost_hi", "hi"), "en-IN": ("amber_dost_en", "en-gb")}
+
 MAX_SEGMENT = 128
 
 
@@ -104,9 +107,12 @@ def load_engine():
 
     root = Path.home() / ".cache" / "jarvis-amber-voice" / REVISION[:12]
     root.mkdir(parents=True, exist_ok=True)
-    model, hi, en = [checked_asset(root, e) for e in ASSETS]
+    model, *voices = [checked_asset(root, e) for e in ASSETS]
     # Float arrays only; no executable code, pickled weights, or user-supplied URLs.
-    arrays = {p.stem: np.fromfile(p, dtype="<f4").reshape(510, 1, 256) for p in (hi, en)}
+    arrays = {p.stem: np.fromfile(p, dtype="<f4").reshape(510, 1, 256) for p in voices}
+    # Convex blends of licensed stock embeddings, not an imitation or voiceprint.
+    arrays["amber_dost_hi"] = 0.58 * arrays["hm_psi"] + 0.42 * arrays["hm_omega"]
+    arrays["amber_dost_en"] = 0.60 * arrays["bm_george"] + 0.40 * arrays["bm_fable"]
     fd, tmp = tempfile.mkstemp(prefix=".pair-", dir=root)
     try:
         with os.fdopen(fd, "wb") as f:
@@ -184,6 +190,9 @@ class VoiceEngine:
                 clean,
                 flags=re.IGNORECASE,
             )
+            if language == "hi":
+                names = {"youtube": "यूट्यूब", "google maps": "गूगल मैप्स", "gmail": "जीमेल", "notepad": "नोटपैड", "spotify": "स्पॉटिफ़ाई", "calculator": "कैलकुलेटर", "windows": "विंडोज़", "github": "गिटहब", "space": "स्पेस"}
+                clean = re.sub(r"\b(?:" + "|".join(names) + r")\b", lambda m: names[m[0].lower()], clean, flags=re.I)
             phones = self.model.tokenizer.phonemize(clean, language)
             if not phones or len(phones) > 186:
                 return {"ok": False, "reason": "system"}
@@ -193,9 +202,9 @@ class VoiceEngine:
                 voice=name,
                 lang=language,
                 is_phonemes=True,
-                speed=1.02,
-                sentence_pause=0.22,
-                clause_pause=0.09,
+                speed=0.97 if clean.endswith("?") else (0.99 if language == "hi" else 1.0),
+                sentence_pause=0.27,
+                clause_pause=0.13,
             )
             sound = np.asarray(sound, dtype=np.float32).reshape(-1)
             if sr != 24000 or not 0 < len(sound) <= sr * 26 or not np.isfinite(sound).all():

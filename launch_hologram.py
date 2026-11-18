@@ -63,6 +63,7 @@ def open_window(url, *, tab=False):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="JARVIS · amber hologram")
     ap.add_argument("--port", type=int, default=8765)
+    ap.add_argument("--desktop", action="store_true", help="allow reviewed Windows app launches with native confirmation; loopback only")
     ap.add_argument("--no-open", action="store_true", help="do not open a browser")
     ap.add_argument(
         "--browser-tab",
@@ -85,6 +86,15 @@ def main(argv=None):
     ap.add_argument("--lang", choices=["hi", "en"], default="hi")
     ap.add_argument("--zone", default="UTC", help="IANA timezone for a local-time CLI question")
     args = ap.parse_args(argv)
+    desktop = None
+    if args.desktop:
+        if args.preview or args.no_open or args.ask:
+            ap.error("--desktop needs a private browser window; not available for preview or CLI questions")
+        from hologram.desktop import new_session
+        try:
+            desktop = new_session()
+        except (ValueError, OSError) as exc:
+            ap.error(str(exc))
     if args.ask is not None:
         out = answer(
             args.ask,
@@ -103,7 +113,7 @@ def main(argv=None):
     if not 0 <= args.port <= 65535:
         ap.error("port must be 0–65535")
     try:
-        server = make_server(args.port, preview=args.preview)
+        server = make_server(args.port, preview=args.preview, desktop=desktop)
     except OSError as exc:
         ap.exit(1, f"Cannot open port {args.port}: {exc}. Try --port 0.\n")
     if server.neural_voice:
@@ -116,11 +126,12 @@ def main(argv=None):
         else "system voice (use the enhanced setup for the male neural voices)"
     )
     print(
-        f"JARVIS hologram | {mode}\nVoice: {sound}\n{url}\nTap once for hands-free conversation; Esc stops. V: preview the voice. F: full screen. Ctrl+C here to stop.",
+        f"JARVIS hologram | {mode}\nVoice: {sound}\n{url}\nAllow the mic on open for hands-free conversation; tap if your browser requires it. Esc stops. V: preview the voice. F: full screen. Ctrl+C here to stop.",
         flush=True,
     )
     if not args.no_open and not args.preview:
-        opener = threading.Timer(0.25, open_window, args=(url,), kwargs={"tab": args.browser_tab})
+        private_url = url + ("#desktop=" + desktop.key if desktop else "")
+        opener = threading.Timer(0.25, open_window, args=(private_url,), kwargs={"tab": args.browser_tab})
         opener.daemon = True
         opener.start()
     try:

@@ -1,7 +1,8 @@
 <!doctype html>
 <html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#020305"><meta name="jarvis-host" content="portable"><meta name="jarvis-voice" content="system"><meta name="color-scheme" content="dark"><title>J.A.R.V.I.S. · Amber companion</title><link rel="terms-of-service" href="/terms"><link rel="icon" href="data:,"><style>
 :root{color-scheme:dark;background:#020305}*{box-sizing:border-box}html,body,main{width:100%;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}canvas{display:block;width:100%;height:100%;background:#020305;outline:none;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;cursor:grab}canvas:active{cursor:grabbing}canvas.rest{cursor:none}.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;clip:rect(0,0,0,0);clip-path:inset(50%);overflow:hidden;white-space:nowrap;border:0}
-</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><input id="command" class="sr" aria-label="Voice alternative: type one command and press Enter" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><p class="sr" id="keys" lang="en">Tap once and allow the mic. After each answer JARVIS listens for the next question. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. T: type a command without a visible overlay. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><div class="sr" role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
+#review[hidden]{display:none}#review{position:fixed;inset:auto 50% max(20px,env(safe-area-inset-bottom)) auto;transform:translateX(50%);display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.6rem;padding:.7rem 1rem;width:max-content;max-width:88vw;border:1px solid #84602b;border-radius:16px;background:#0b0c0feb;color:#f7dfbb;font:500 14px/1.5 system-ui,sans-serif;text-align:center}#destination{width:100%;overflow-wrap:anywhere}#review button{font:inherit;border:1px solid #6c542e;color:#ffddaa;background:#211a10;border-radius:9px;padding:.35rem 1rem;cursor:pointer}#review button:focus-visible{outline:2px solid #ffcf73;outline-offset:2px}
+</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><input id="command" class="sr" aria-label="Voice alternative: type one command and press Enter" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. After each answer JARVIS listens for the next question. Say listen patiently for longer pauses, or what did you hear for the last phrase. External sites require a tap on the named destination; Windows apps require the private launcher and native approval. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. T: type a command without a visible overlay. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div class="sr" role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
 "use strict";
 /* AMBER / Geometry atlas. All positions are generated in three dimensions.
    Four moving assemblies: outer skin, inner machinery, signal bus, and lens. */
@@ -1959,6 +1960,9 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
             )
       );
     }
+    const exam=/^(?:(?:mera|मेरी|मेरा|कल|kal|aaj|आज|my|i have|i’ve got)\s+){1,4}(?:ek |an? |एक )?(?:exam|interview|इंटरव्यू|एग्जाम|एग्ज़ाम|परीक्षा)(?: (?:hai|है|कल|tomorrow|today|coming up|होगी|होगा|हैं))*$/.test(q);
+    if(exam){beats('company',{exam:true});return response(W('What’s on your mind about it? I can just listen, or we can plan the first step.','उसकी तैयारी कैसी लग रही है? चाहो तो बस सुनूँ, या साथ में पहला कदम तय करें।'),{chat:true});}
+    if(/^(?:yaar |यार )?(?:i need to vent|bas baat karni hai|baat karni hai|बस बात करनी है|बात करनी है|मन भारी है|mann bhari hai|thak gaya hu[nm]?|थक गया हूँ|थक गई हूँ)$/.test(q)){beats('company');return response(W('I’m here. Want to tell me what happened, without trying to fix it yet?','हाँ, बताओ। अभी हल ढूँढना ज़रूरी नहीं। क्या हुआ?'),{chat:true});}
     const recipe = findAny(q);
     if (recipe) {
       if (recipe.steps[0].kind === "quiz") {
@@ -2003,6 +2007,8 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
           });
         }
       }
+      if (b.type === 'company' && /^(?:just listen|bas suno|बस सुनो|सुनो|baat karni hai|बात करनी है)$/.test(q))return response(W('Go on. What happened next?', 'हाँ, बताओ। फिर क्या हुआ?'),{chat:true});
+      if (b.type === 'company' && /^(?:help me plan|help|idea do|मदद करो|आइडिया दो|plan banao|प्लान बनाओ)$/.test(q))return response(W(b.exam?'Pick the one topic you dread most. Want to turn it into one practice question?':'Let’s start small. Which one bit would you like to untangle first?',b.exam?'जिस टॉपिक से सबसे ज़्यादा डर लग रहा है, उसका नाम बताओ। उसी से एक छोटा सवाल बनाते हैं।':'एक ही चीज़ से शुरू करते हैं। सबसे पहले कौन सी बात सुलझाएँ?'),{chat:true});
       if (b.type === "rough" && /^(?:talk|let's talk|baat|बात|बात करते हैं|सुनो)$/.test(q))
         return response(
           W(
@@ -2031,7 +2037,7 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
         q
       )
     )
-      return response(W("Nice. What made it a good one?", "अच्छा लगा सुनकर। ऐसा क्या हुआ कि दिन बढ़िया हो गया?"), {
+      return response(W("That’s good to hear. What was the best bit?", "अच्छा लगा सुनकर। ऐसा क्या हुआ कि दिन बढ़िया हो गया?"), {
         chat: true,
       });
     if (
@@ -2041,8 +2047,8 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     )
       return response(
         W(
-          "Ready for a chat. What’s been the best bit of your day so far?",
-          "बातचीत के लिए तैयार हूँ। आज अब तक सबसे अच्छी बात क्या हुई?"
+          "Glad you stopped by. How’s your day treating you?",
+          "बढ़िया, तुम बताओ। आज दिन ने थोड़ा आराम दिया या भागदौड़ रही?"
         ),
         { chat: true }
       );
@@ -2118,9 +2124,63 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
 }
 /* COMPANION END */
 
-/* Conversation controller: OFF → LISTEN → LOOK UP → PLAY → LISTEN. The first
-   gesture is the only automatic-rearm consent. It is never stored or carried
-   into another tab/load. A recognizer is never reused for another turn. */
+/* PILOT GRAMMAR: pure, finite intents. No recognized text is a path, code or origin. */
+const Pilot = (() => {
+  const rows = [
+    ['youtube','YouTube','यूट्यूब','https://www.youtube.com/','you tube|यूट्यूब|यू ट्यूब|यूटूब|यूटुब'],
+    ['music','YouTube Music','यूट्यूब म्यूज़िक','https://music.youtube.com/','youtube music|you tube music|यूट्यूब म्यूजिक|यूट्यूब म्यूज़िक'],
+    ['maps','Google Maps','गूगल मैप्स','https://www.google.com/maps','google maps|map|maps|गूगल मैप|गूगल मैप्स|मैप्स|मैप'],
+    ['gmail','Gmail','जीमेल','https://mail.google.com/','g mail|जीमेल|जी मेल|गूगल मेल'],
+    ['spotify','Spotify','स्पॉटिफ़ाई','https://open.spotify.com/','स्पॉटिफाई|स्पॉटिफ़ाई|स्पॉटिफाइ|स्पोटिफाई'],
+    ['calendar','Google Calendar','गूगल कैलेंडर','https://calendar.google.com/','google calendar|कैलेंडर|गूगल कैलेंडर'],
+    ['drive','Google Drive','गूगल ड्राइव','https://drive.google.com/','google drive|गूगल ड्राइव'],
+    ['wikipedia','Wikipedia','विकिपीडिया','https://hi.wikipedia.org/','विकिपीडिया|विकीपीडिया'],
+    ['github','GitHub','गिटहब','https://github.com/','git hub|गिटहब|गिट हब'],
+    ['google','Google','गूगल','https://www.google.com/','गूगल|गूगल सर्च'],
+    ['calculator','Calculator','कैलकुलेटर',null,'calc|कैलकुलेटर|कैलक्यूलेटर|केलकुलेटर|कैलकुलेटर ऐप'],
+    ['notepad','Notepad','नोटपैड',null,'note pad|नोटपैड|नोट पैड|नोटपेड'],
+    ['paint','Paint','पेंट',null,'ms paint|microsoft paint|पेंट|एमएस पेंट'],
+  ];
+  const clean = t => String(t||'').normalize('NFKC').replace(/[’‘]/g,"'").replace(/\s+/g,' ').trim();
+  const wake = t => clean(t).replace(/^(?:(?:hey|hi|ok(?:ay)?|हे|हेलो|ओके)\s+)?(?:jar\s?vis|जार्विस|जारविस|जर्विस|जार्विश|जारविश|जाविस)(?=$|[\s,:।.!?-])[\s,:।.!?-]*/iu,'');
+  const key = t => wake(t).toLowerCase().replace(/[?.!।,]+$/u,'').trim();
+  const alias = new Map(); rows.forEach(([id,en,hi,url,more])=>[id,en,hi,...more.split('|')].forEach(n=>alias.set(key(n),{id,en,hi,url})));
+  const prep = t => key(t).replace(/^(?:(?:can you|could you|would you|please|bhai|yaar|zara|jara|mere liye|प्ली[ज़ज]+|मेरे लिए|ज़रा|जरा|यार|भाई)\s+)+/u,'').replace(/(?:\s+(?:please|yaar|bhai|na|for me|प्लीज़|प्लीज|ना|यार|भाई))+$/u,'').trim();
+  const v = '(?:open|launch|start|run|ओपन|लॉन्च|रन|स्टार्ट|खोल|चालू|शुरू|khol|chalu|shuru|chala|चला)(?:\\s+(?:kar|kr|कर|karke))?(?:\\s+(?:do|de|dena|dijiye|karo|दो|दे|देना|दीजिए|करो|कीजिए))?|kholo|kholna|kholiye|chalao|खोलो|खोलना|खोलिए|खोलें|चलाओ|चलिए';
+  const pre = new RegExp('^(?:'+v+')\\s+(?:the )?(.+)$','u'), post = new RegExp('^(.+?)\\s+(?:(?:ko|को)\\s+)?(?:'+v+')$','u');
+  const actionWord = new RegExp('(?:^|\\s)(?:'+v+')(?=\\s|$)','u');
+  function action(t) {
+    const q=prep(t); if (/^(?:when i say|jab (?:main|mai)|जब (?:मैं|मै)|how to|how do i)\s/u.test(q)) return null;
+    const neg=/(?:^|\s)(?:don't|dont|do not|not|never|nahi|nahin|mat|मत|नहीं|नही)(?=\s|$)/u.test(q);
+    if(neg && actionWord.test(q)) return {kind:'cancel'};
+    let m=q.match(/^(?:search|find) (youtube|maps|google maps|यूट्यूब|गूगल मैप्स) (?:for )?(.+)$/u)||q.match(/^(youtube|you tube|maps|google maps|यूट्यूब|गूगल मैप्स|मैप्स) (?:par|pe|पर|पे) (.+?) (?:search karo|सर्च करो|search कर दो|खोजो|ढूंढो|dhoondo|dhundo)$/u);
+    if(m){ const dest=alias.get(m[1]), term=m[2].trim(); if(!dest || !/^[\p{L}\p{M}\p{N}][\p{L}\p{M}\p{N} '\-]{0,69}$/u.test(term))return {kind:'unknown'};
+      const u=new URL(dest.id==='youtube'?'https://www.youtube.com/results':'https://www.google.com/maps/search/');if(dest.id==='maps')u.searchParams.set('api','1');u.searchParams.set(dest.id==='youtube'?'search_query':'query',term);return {...dest,kind:'web',url:u.href,term}; }
+    m=q.match(post)||q.match(pre); if(!m)return null;
+    const dest=alias.get(m[1].replace(/\s+(?:app|site|website|ऐप|ऐप्लिकेशन)$/u,''));return dest?{...dest,kind:dest.url?'web':'desktop'}:{kind:'unknown'};
+  }
+  function heard(result){
+    const choices=Array.from(result||[]).slice(0,3).map(x=>({t:clean(x.transcript).slice(0,361),c:Number(x.confidence)})).filter(x=>x.t);if(!choices.length)return null;
+    const top=choices[0], a=action(top.t), known=p=>p && (p.kind==='web'||p.kind==='desktop');
+    let unsure=top.c>0 && top.c<0.5;
+    for(const other of choices.slice(1)){
+      const b=action(other.t);if(known(a)&&known(b)&&(a.id!==b.id||a.term!==b.term)&&(!(top.c>0)||!(other.c>0)||top.c-other.c<0.15))unsure=true;
+      // Only repair an unresolved launch (not a negative, a consent, or a chat)
+      // with a similarly pronounced target. The resulting plan still needs approval.
+      if(a?.kind==='unknown' && known(b) && !b.term && other.c>=0.65 && (!top.c||other.c>=top.c-0.10)){
+        const x=prep(top.t).replace(/\s+/g,''), y=prep(other.t).replace(/\s+/g,'');let i=0;while(i<x.length && x[i]===y[i])i++;let j=0;while(j<x.length-i && j<y.length-i && x[x.length-1-j]===y[y.length-1-j])j++;
+        if(Math.max(x.length,y.length)-i-j<=2 && choices.slice(1).every(z=>!known(action(z.t))||action(z.t).id===b.id))return {text:other.t,unsure:false};
+      }
+    }return {text:top.t,unsure};
+  }
+  const fragment = t => !prep(t)||alias.has(prep(t))||/^(?:open|launch|run|kholo|खोलो|मुझे|मुझे ज़रा|set a timer for|time in|weather in|search youtube for)$/.test(prep(t));
+  return {action,heard,fragment,key,wake};
+})();
+/* PILOT END */
+
+/* Conversation controller: OPEN / TAP → LISTEN → LOOK UP → PLAY → LISTEN.
+   One native permission-gated attempt per fresh foreground document. A stop,
+   denial, hidden tab or stale callback must never start another session. */
 (() => {
   const stage = makeStage(document.getElementById("core")),
     core = document.getElementById("core"),
@@ -2160,6 +2220,16 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     follow = "",
     past = [],
     timer = null;
+  let phraseTimer=0, lastHeard='', patient=false, inputLang='';
+  try{patient=sessionStorage.getItem('amber:patient')==='yes';const l=sessionStorage.getItem('amber:ear');if(['en-IN','hi-IN'].includes(l))inputLang=l;}catch(_){}
+  const openPref = "amber:mic-on-open";
+  let automatic = true,
+    openingRequest = false,
+    openedSession = false,
+    heldReply = null;
+  try {
+    automatic = localStorage.getItem(openPref) !== "off";
+  } catch (_) {}
   let lastTopic = "",
     topicAt = 0;
   let voiceSeq = 0,
@@ -2196,6 +2266,46 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     }
   }
   void refreshShelf();
+  // A relative loopback channel exists only in the private launcher tab. The
+  // production site never connects to localhost. No credential goes into site storage.
+  let deskKey = '', review = null, reviewTimer = 0, deskCall = null;
+  if(window.top === window && location.protocol === 'http:' && location.hostname === '127.0.0.1' && /^#desktop=[A-Za-z0-9_-]{43}$/.test(location.hash)) {
+    deskKey = location.hash.slice(9);
+    try { history.replaceState(null,'',location.pathname); } catch (_) { deskKey=''; }
+  }
+  const tray=document.getElementById('review'), go=document.getElementById('approve'), back=document.getElementById('dismiss');
+  function dropReview(){clearTimeout(reviewTimer);review=null;tray.hidden=true;if(deskCall){deskCall.abort();deskCall=null;}}
+  function confirmWeb(e){if(!e?.isTrusted||!review||review.until<=Date.now()||review.tok!==ticket||document.hidden||window.top!==window)return false;
+    const url=review.url;cancel();core.focus({preventScroll:true});window.open(url,'_blank','noopener,noreferrer');return true;
+  }
+  go.addEventListener('click', e=>confirmWeb(e));back.addEventListener('click',()=>{cancel();core.focus({preventScroll:true})});
+  function proposeWeb(a){cancel(); const label=words(a.en,a.hi), suffix=a.term?' · '+a.term:'';
+    review={url:a.url,until:Date.now()+45000,tok:ticket};tray.hidden=false;
+    document.getElementById('destination').textContent=words('Open in a new tab','नए टैब में खोलें')+' · '+new URL(a.url).hostname+suffix;
+    go.textContent=label+' ↗';back.textContent=words('Cancel','रद्द करें');go.focus({preventScroll:true});
+    reviewTimer=setTimeout(()=>{if(review)cancel()},45000);
+    speak(words(`${label}${suffix}. Tap to open it, or press Escape to leave it here.`,`${label}${suffix} खोलूँ? खोलने के लिए नाम पर टैप करो।`));
+  }
+  async function nativeApp(a,tok){
+    if(!deskKey){speak(words(`${a.en} is a Windows app. Start Private JARVIS on your PC; this website can't run it.`,`${a.hi} विंडोज़ ऐप है। अपने पीसी पर प्राइवेट जार्विस चलाओ। वेबसाइट से तुम्हारा कंप्यूटर नहीं चल सकता।`));return;}
+    setArmed(false);state('thinking');announce(words(`Approve ${a.en} in the Windows dialog.`,`विंडोज़ के डायलॉग में ${a.hi} की पुष्टि करो।`));
+    const c=new AbortController();deskCall=c;const tm=setTimeout(()=>c.abort(),32000);
+    const live=()=>ticket===tok&&!document.hidden&&deskCall===c&&!c.signal.aborted;
+    async function post(op,body){const res=await fetch('/api/desktop/'+op,{method:'POST',credentials:'omit',cache:'no-store',redirect:'error',headers:{'Content-Type':'application/json','X-Jarvis-Session':deskKey},body:JSON.stringify(body),signal:c.signal});if(!res.ok)throw Error();return res.json()}
+    try{const p=await post('approve',{app:a.id});if(!live())return;
+      if(!p.ok||typeof p.permit!=='string'){speak(words(`No launch. ${a.en} stayed closed.`,`ठीक है, ${a.hi} नहीं खोला।`));return;}
+      const result=await post('commit',{app:a.id,permit:p.permit});if(live())speak(result.ok?words(`I started ${a.en}.`,`${a.hi} शुरू कर दिया।`):words('Windows could not start it.','विंडोज़ इसे शुरू नहीं कर पाया।'));
+    }catch(_){if(ticket===tok&&!document.hidden)speak(words('I couldn’t confirm the launch. Check the private session on your PC.','ऐप खुलने की पुष्टि नहीं हुई। अपने पीसी का प्राइवेट सेशन देखो।'));}
+    finally{clearTimeout(tm);if(deskCall===c)deskCall=null;}
+  }
+  function launchIntent(a,tok){if(!a)return false;
+    if(a.kind==='cancel')speak(words('Okay, I won’t open anything.','ठीक है, कुछ नहीं खोलूँगा।'));
+    else if(transport!=='http'||window.top!==window)speak(words('Open JARVIS in its own tab for launch requests.','कुछ खोलने के लिए जार्विस को उसके अपने टैब में खोलो।'));
+    else if(a.kind==='web')proposeWeb(a);
+    else if(a.kind==='desktop')void nativeApp(a,tok);
+    else speak(words('That isn’t on my launch list. Try YouTube or Maps, or Calculator in the private Windows app.','यह मेरी खोलने वाली सूची में नहीं है। यूट्यूब या मैप्स बोलकर देखो। पीसी पर कैलकुलेटर भी खोल सकता हूँ।'));
+    return true;
+  }
   function noteChat(input, reply) {
     past.push(
       { role: "user", content: input.slice(0, 240) },
@@ -2238,11 +2348,12 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     } catch (_) {}
   }
   function releaseInput() {
+    clearTimeout(phraseTimer);
     clearTimeout(recordLimit);
     if (!rec) return quietMic;
     const r = rec;
     rec = null;
-    r.onresult = r.onspeechstart = r.onnomatch = r.onerror = null;
+    r.onresult = r.onstart = r.onaudiostart = r.onspeechstart = r.onnomatch = r.onerror = null;
     quietMic = new Promise((resolve) => {
       let settled = false;
       const done = () => {
@@ -2279,6 +2390,10 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     if (document.activeElement === field) field.blur();
   }
   function invalidate() {
+    dropReview();
+    openingRequest = openedSession = false;
+    root.dataset.micLaunch = "manual";
+    heldReply = null;
     ticket++;
     clearTimeout(rearm);
     releaseInput();
@@ -2288,6 +2403,7 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     state("idle");
   }
   function cancel() {
+    lastHeard="";
     setArmed(false);
     invalidate();
     friend.reset();
@@ -2719,6 +2835,18 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
       for (; i < parts.length && valid(); i++)
         if (!(await playNative(parts[i], lang, valid))) {
           if (valid()) {
+            // Browsers may allow recognition but still require a gesture for audio.
+            // Keep only the unsaid part in RAM; a tap replays it, never the command.
+            if (openedSession && armed) {
+              heldReply = { text: parts.slice(i).join(" "), lang, until: Date.now() + 90000 };
+              root.dataset.micLaunch = "audio-paused";
+              setArmed(false);
+              state("idle");
+              announce(
+                words("Mic paused. Tap the core to hear my reply.", "माइक रुका है। जवाब सुनने के लिए कोर पर टैप करो।")
+              );
+              return;
+            }
             setArmed(false);
             state("idle");
             announce(
@@ -2751,7 +2879,8 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     if (notify) speak(words("English is ready.", "हिंदी में बोलिए।"));
   }
   useLanguage(locale, false);
-  function toggle() {
+  function toggle(e) {
+    if(review){confirmWeb(e);return;}
     if (!armed && phase === "idle" && reviewDraft()) return;
     void refreshShelf();
     if (armed || phase !== "idle") {
@@ -2761,6 +2890,15 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     }
     unlock();
     if (!allowed()) return;
+    const replay = heldReply;
+    heldReply = null;
+    openedSession = false;
+    if (replay && replay.until >= Date.now()) {
+      fallbackUntil = 0;
+      setArmed(true);
+      void speak(replay.text, replay.lang, ++ticket);
+      return;
+    }
     if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
       speak(
         words(
@@ -2799,8 +2937,9 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     };
     rearm = setTimeout(again, delay);
   }
-  function listen(tok) {
-    if (!armed || tok !== ticket || typed || document.hidden || rec || player) return;
+  function listen(tok, startupWait = 0, carry = null) {
+    let awaitingStart = startupWait > 0;
+    if ((!armed && !awaitingStart) || tok !== ticket || typed || document.hidden || rec || player) return;
     const R = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!R) {
       cancel();
@@ -2808,15 +2947,66 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     }
     let r;
     const began = performance.now();
-    const current = () => armed && tok === ticket && rec === r && !document.hidden;
+    const current = () => (armed || awaitingStart) && tok === ticket && rec === r && !document.hidden;
+    // Final results are a cumulative list, not a queue. Keep interim speech
+    // out of commands. One bounded continuation tolerates mobile end-of-session.
+    let parts=[], partial=false, resumed=false;
+    const all=()=>[...(carry||[]),...parts];
+    const line=()=>all().map(p=>p.text).join(' ').trim();
+    const finish=(unclear=false)=>{
+      if(!current())return;
+      const q=line(),weak=unclear || partial || !q || q.length>360 || all().some(p=>p.unsure);
+      releaseInput();silence=rapidEnds=netErrors=0;
+      if(weak){speak(words('I missed the last bit. Could you say the whole thing once more?','आख़िरी हिस्सा साफ़ नहीं सुना। एक बार पूरा बोलोगे?'),locale,tok);return;}
+      if(/^(?:what did you hear|maine kya (?:kaha|bola)|मैंने क्या (?:कहा|बोला))$/.test(Pilot.key(q))){speak(lastHeard?words('I heard: ','मैंने सुना: ')+lastHeard:words('No earlier phrase in this session.','इस बार अभी कुछ और नहीं सुना।'),locale,tok);return;}
+      lastHeard=q;void execute(q,tok);
+    };
+    const settle=(delay)=>{clearTimeout(phraseTimer);phraseTimer=setTimeout(()=>finish(),delay)};
+    const hold=()=>Pilot.fragment(line())?(patient?2600:1850):(patient?1650:830);
+    const listening = () => {
+      state("listening");
+      announce(
+        words(
+          "Listening. Say stop listening to end the conversation.",
+          "सुन रहा हूँ। बंद करने के लिए कहिए, माइक बंद करो।"
+        )
+      );
+    };
+    const didStart = () => {
+      if (!awaitingStart || !current()) return;
+      awaitingStart = openingRequest = false;
+      setArmed(true);
+      root.dataset.micLaunch = "started";
+      listening();
+      clearTimeout(recordLimit);
+      recordLimit = setTimeout(quiet, 26000);
+    };
+    const manualFallback = () => {
+      if (!current()) return;
+      cancel();
+      root.dataset.micLaunch = "manual";
+      announce(
+        words(
+          "Mic off. Allow microphone access, then tap the core or press Space to talk.",
+          "माइक बंद है। ब्राउज़र में अनुमति दो, फिर कोर पर टैप करो या स्पेस दबाओ।"
+        )
+      );
+    };
     const quiet = () => {
       if (!current()) return;
+      if (awaitingStart) return manualFallback();
+      if(line() || partial || resumed){finish(partial || !line());return;}
       releaseInput();
       silence++;
       scheduleListen(Math.min(1900, 340 + silence * 160));
     };
     const fail = (code) => {
       if (!current()) return;
+      if (
+        awaitingStart ||
+        (openedSession && ["not-allowed", "service-not-allowed", "audio-capture"].includes(code))
+      )
+        return manualFallback();
       if (code === "no-speech") {
         quiet();
         return;
@@ -2849,38 +3039,46 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     try {
       r = new R();
       rec = r;
-      r.lang = locale;
-      r.interimResults = false;
-      r.continuous = false;
-      r.maxAlternatives = 1;
-      state("listening");
-      announce(
-        words(
-          "Listening. Say stop listening to end the conversation.",
-          "सुन रहा हूँ। बंद करने के लिए कहिए, माइक बंद करो।"
-        )
-      );
+      r.lang = inputLang || locale;
+      r.interimResults = true;
+      r.continuous = true;
+      r.maxAlternatives = 3;
+      if (awaitingStart) {
+        openingRequest = true;
+        root.dataset.micLaunch = "requesting";
+        state("standby");
+        announce(
+          words(
+            "Allow the microphone if prompted. Escape cancels.",
+            "ब्राउज़र पूछे तो माइक की अनुमति दो। एस्केप से रद्द कर सकते हो।"
+          )
+        );
+        r.onstart = r.onaudiostart = didStart;
+      } else listening();
       r.onspeechstart = () => {
-        if (current()) stage.pulse(0.42);
+        if (current()) {didStart(); resumed=true; clearTimeout(phraseTimer);stage.pulse(0.42);}
       };
-      r.onnomatch = quiet;
-      r.onresult = (e) => {
-        if (!current()) return;
-        const result = e.results?.[e.resultIndex || 0];
-        if (result?.isFinal === false) return;
-        const line = result?.[0]?.transcript?.trim();
-        if (!line) {
-          quiet();
-          return;
-        }
-        silence = rapidEnds = netErrors = 0;
-        releaseInput();
-        void execute(line, tok);
+      r.onnomatch = () => {if(current())finish(true)};
+      r.onresult = e => {
+        if (!current() || !e.results?.length) return;
+        didStart(); resumed=true; clearTimeout(phraseTimer);
+        const rows=Array.from(e.results);if(rows.length>20){finish(true);return;}
+        parts=rows.filter(x=>x.isFinal!==false).map(Pilot.heard).filter(Boolean);
+        partial=rows.some(x=>x.isFinal===false);
+        if(!partial && /^(?:stop listening|mic band karo|माइक बंद करो|सो जाओ)$/.test(Pilot.key(line()))){parts.forEach(p=>p.unsure=false);finish();return;}
+        if(partial){stage.pulse(0.23);settle(5200);}else if(parts.length)settle(hold());
       };
       r.onerror = (e) => fail(e.error);
       r.onend = () => {
         if (!current()) return;
+        if (awaitingStart) return manualFallback();
         clearTimeout(recordLimit);
+        clearTimeout(phraseTimer);
+        if(line() || partial){
+          if(partial || carry || !Pilot.fragment(line())){finish(partial);return;}
+          const saved=all();rec=null;r.onend=null;state('standby');
+          rearm=setTimeout(()=>{if(armed&&ticket===tok&&!document.hidden&&!typed&&!player&&!rec)listen(tok,0,saved);},95);return;
+        }
         if (performance.now() - began < 650) {
           if (++rapidEnds >= 3) {
             fail("ended");
@@ -2891,8 +3089,9 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
         silence++;
         scheduleListen(Math.min(1850, 330 + silence * 140));
       };
-      recordLimit = setTimeout(quiet, 26000);
+      recordLimit = setTimeout(awaitingStart ? manualFallback : quiet, startupWait || 26000);
       r.start();
+      if(carry && current() && !resumed)settle(hold());
     } catch (_) {
       if (rec === r && r) fail("unavailable");
       else {
@@ -2900,6 +3099,91 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
         announce(words("Voice input unavailable.", "आवाज़ पहचान उपलब्ध नहीं है।"));
       }
     }
+  }
+  async function openMicrophone() {
+    const token = ticket;
+    const eligible = () =>
+      token === ticket &&
+      automatic &&
+      transport === "http" &&
+      window.top === window &&
+      window.isSecureContext &&
+      !document.hidden &&
+      document.visibilityState === "visible" &&
+      !document.prerendering &&
+      !armed &&
+      !typed &&
+      !rec &&
+      !player &&
+      phase === "idle" &&
+      !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+    root.dataset.micLaunch = "manual";
+    if (!eligible()) return;
+    const policy = document.permissionsPolicy || document.featurePolicy;
+    try {
+      if (policy?.allowsFeature && !policy.allowsFeature("microphone")) return;
+    } catch (_) {
+      /* The browser still enforces its policy at start(). */
+    }
+    let permission;
+    try {
+      permission = await navigator.permissions?.query({ name: "microphone" });
+    } catch (_) {}
+    if (!eligible()) return; // A tap, Escape, navigation or hidden tab wins over a late query.
+    if (permission) {
+      let granted = permission.state === "granted";
+      permission.addEventListener?.("change", () => {
+        if (
+          (permission.state === "denied" || (granted && permission.state !== "granted")) &&
+          (armed || openingRequest || heldReply)
+        )
+          cancel();
+        granted = permission.state === "granted";
+      });
+      if (permission.state === "denied") {
+        announce(
+          words(
+            "Microphone blocked in site settings. You can press T to type.",
+            "साइट सेटिंग में माइक बंद है। टाइप करने के लिए टी दबाओ।"
+          )
+        );
+        return;
+      }
+    }
+    // SpeechRecognition owns the native permission prompt. Do not also open
+    // getUserMedia, simulate a click, start audio, or retain a spare media stream.
+    openedSession = true;
+    listen(++ticket, permission?.state === "granted" ? 8000 : 55000);
+  }
+  function setAutomatic(value) {
+    automatic = value;
+    let saved = true;
+    try {
+      if (value) localStorage.removeItem(openPref);
+      else localStorage.setItem(openPref, "off");
+    } catch (_) {
+      saved = false;
+    }
+    const keep = value && armed;
+    cancel();
+    setArmed(keep);
+    if (!saved) {
+      speak(
+        words(
+          "Browser storage is unavailable; I can't save the startup preference.",
+          "ब्राउज़र यह सेटिंग सेव नहीं कर सका।"
+        )
+      );
+      return;
+    }
+    speak(
+      value
+        ? words(
+            "On the next visit, I’ll try to listen when you open this tab.",
+            "अगली बार जार्विस खोलोगे तो अपने आप सुनने की कोशिश करूँगा।"
+          )
+        : words("Mic off. On future visits, tap to talk.", "माइक बंद है। अगली बार बात करने के लिए कोर पर टैप करो।")
+    );
   }
   function switchLanguage(l) {
     const keep = armed;
@@ -2951,6 +3235,14 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     }
   }
   function local(q, raw, tok, fromRecipe = false) {
+    if (/^(?:auto mic (?:off|band(?: karo)?)|ऑटो माइक बंद(?: करो)?)$/.test(q)) {
+      setAutomatic(false);
+      return true;
+    }
+    if (/^(?:auto mic (?:on|chalu(?: karo)?)|ऑटो माइक चालू(?: करो)?)$/.test(q)) {
+      setAutomatic(true);
+      return true;
+    }
     if (
       /^(?:(?:please|बस|प्लीज़)[ ,]+)?(?:stop listening|turn (?:the )?(?:mic(?:rophone)? )?off|switch off (?:the )?mic(?:rophone)?|end (?:the )?conversation|go to sleep|(?:mic|mike|माइक|माईक|माइक्रोफोन|माइक्रोफ़ोन|मिक|conversation|बातचीत|सुनना) (?:band|बंद|बन्द|off|ऑफ|ऑफ़)(?: (?:kar(?:o)?|कर|करो))?(?: (?:do|दो|dijiye|दीजिए))?|so jao|सो जाओ|चुप हो जाओ)$/i.test(
         q
@@ -2973,7 +3265,12 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
       return true;
     }
     if (!fromRecipe) {
-      const action = friend.handle(raw);
+      if(/^(?:listen patiently|wait a little longer|thoda ruk (?:ke|kar) suno|थोड़ा रुक (?:के|कर) सुनो|आराम से सुनो|normal pauses|सामान्य विराम)$/.test(q)){
+        patient=!/normal|सामान्य/.test(q);try{sessionStorage.setItem('amber:patient',patient?'yes':'no')}catch(_){}speak(patient?words('Take your time. I’ll wait a little longer between words.','आराम से बोलो। तुम्हारे रुकने पर मैं थोड़ा और इंतज़ार करूँगा।'):words('Back to normal pauses.','ठीक है, पहले जैसा विराम।'));return true;}
+      const ear=/^(?:listen in (english|hindi)|(?:sunne ki bhasha|सुनने की भाषा) (english|hindi|हिंदी|अंग्रेज़ी)|((?:इंग्लिश|हिंदी|अंग्रेज़ी)) सुनो)$/.exec(q);
+      if(ear){inputLang=/english|इंग्लिश|अंग्रेज़ी/.test(q)?'en-IN':'hi-IN';try{sessionStorage.setItem('amber:ear',inputLang)}catch(_){}speak(words('Listening language changed. My reply language stays the same.','सुनने की भाषा बदल दी। जवाब की भाषा वही रहेगी।'));return true;}
+      if(launchIntent(Pilot.action(raw),tok))return true;
+      const action = friend.handle(Pilot.wake(raw));
       if (action) {
         if (action.disarm) setArmed(false);
         if (action.clearHistory) past = [];
@@ -2988,8 +3285,8 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     if (/^(?:help|commands|madad|मदद|मदद करो|क्या कर सकते हो|what can you do)$/.test(q)) {
       speak(
         words(
-          "We can chat, look something up, or invent a shortcut together. Try: surprise me, or teach a shortcut.",
-          "बात करें, कुछ पता लगाएँ या अपना शॉर्टकट बनाएँ? बोलकर देखो, कुछ नया बताओ, या नया शॉर्टकट।"
+          "Try: open YouTube, time in Tokyo, or teach a shortcut. Or tell me about your day.",
+          "यूट्यूब खोलो, टोक्यो का समय, या नया शॉर्टकट बोलकर देखो। या बताओ, आज दिन कैसा रहा?"
         )
       );
       return true;
@@ -3107,15 +3404,14 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     clearTimeout(recordLimit);
     void refreshShelf();
     let text = raw.trim().slice(0, 360);
-    let q = text
-      .replace(/^(?:(?:hey|okay|ok|हे|ओके)\s+)?(?:jarvis|जार्विस|जारविस|जर्विस)[\s,.:।!-]*/i, "")
+    let q = Pilot.wake(text)
       .replace(/[?!.।]+$/, "")
       .replace(/[,،]/g, " ")
       .replace(/\s+/g, " ")
       .trim()
       .toLowerCase();
     if (!q) {
-      speak(words("Yes? What would you like to know?", "जी, बोलिए। क्या जानना चाहेंगे?"));
+      speak(words("I’m here. Go ahead.", "हाँ, सुन रहा हूँ। बोलो।"));
       return;
     }
     if (termsTurn) {
@@ -3154,7 +3450,7 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
     try {
       // A tightly-scoped spoken ellipsis: after a city clock/weather/date,
       // "aur London mein?" does not need to repeat the whole previous question.
-      let lookup = text;
+      let lookup = Pilot.wake(text);
       if (lastTopic && !follow && performance.now() - topicAt < 120000) {
         const m = q.match(
           /^(?:what about|how about|and in)\s+(.{1,52})$|^(?:और|aur)\s+(.{1,52}?)\s+(?:में|का|की|mein|me|ka|ki)$/i
@@ -3292,24 +3588,29 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
       rad = Math.min(r.width * 0.42, r.height * 0.425);
     if (Math.hypot(x / 1.06, y) > rad * 1.08) return;
     if (performance.now() - d.t >= 650) full();
-    else toggle();
+    else toggle(e);
   });
   core.addEventListener("pointercancel", () => {
     down = null;
     stage.hold(false);
   });
   core.addEventListener("click", (e) => {
-    if (e.detail === 0) toggle();
+    if (e.detail === 0) toggle(e);
   });
   document.addEventListener("keydown", (e) => {
+    if (tray.contains(e.target) && ["Enter", " "].includes(e.key)) return;
     if (typed || e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
     let k = e.key.toLowerCase();
     if (k === " " || k === "enter") {
       e.preventDefault();
-      toggle();
+      toggle(e);
     } else if (k === "escape") {
       cancel();
       announce(words("Cancelled.", "रद्द कर दिया।"));
+    } else if (k === "a") {
+      e.preventDefault();
+      unlock();
+      setAutomatic(!automatic);
     } else if (k === "f") full();
     else if (k === "p") stage.togglePause();
     else if (k === "t") {
@@ -3352,5 +3653,19 @@ function makeCompanion({ storage, language, now = Date.now, random = Math.random
   });
   setArmed(false);
   state("idle");
+  // A tab created in the background may try once when *first* opened. This
+  // listener is removed before the attempt. Returning after Stop / pagehide
+  // is not another opening (including back-forward cache restores).
+  const launchTicket = ticket;
+  const firstView = () => {
+    if (document.hidden || document.prerendering) return;
+    document.removeEventListener("visibilitychange", firstView);
+    document.removeEventListener("prerenderingchange", firstView);
+    if (ticket === launchTicket) void openMicrophone();
+  };
+  if (document.hidden || document.prerendering) {
+    document.addEventListener("visibilitychange", firstView);
+    document.addEventListener("prerenderingchange", firstView);
+  } else firstView();
 })();
 </script></body></html>
