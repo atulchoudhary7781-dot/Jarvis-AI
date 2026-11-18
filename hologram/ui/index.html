@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#020305"><meta name="jarvis-host" content="portable"><meta name="jarvis-voice" content="system"><meta name="color-scheme" content="dark"><title>J.A.R.V.I.S. · Amber core</title><link rel="icon" href="data:,"><style>
+<html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#020305"><meta name="jarvis-host" content="portable"><meta name="jarvis-voice" content="system"><meta name="color-scheme" content="dark"><title>J.A.R.V.I.S. · Amber companion</title><link rel="terms-of-service" href="/terms"><link rel="icon" href="data:,"><style>
 :root{color-scheme:dark;background:#020305}*{box-sizing:border-box}html,body,main{width:100%;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}canvas{display:block;width:100%;height:100%;background:#020305;outline:none;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;cursor:grab}canvas:active{cursor:grabbing}canvas.rest{cursor:none}.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;clip:rect(0,0,0,0);clip-path:inset(50%);overflow:hidden;white-space:nowrap;border:0}
-</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><input id="command" class="sr" aria-label="Voice alternative: type one command and press Enter" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><p class="sr" id="keys" lang="en">Tap once and allow the mic. After each answer JARVIS listens for the next question. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. T: type a command without a visible overlay. H: Hindi voice. E: English voice. P: pause or resume rotation. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><div class="sr" role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
+</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><input id="command" class="sr" aria-label="Voice alternative: type one command and press Enter" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><p class="sr" id="keys" lang="en">Tap once and allow the mic. After each answer JARVIS listens for the next question. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. T: type a command without a visible overlay. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><div class="sr" role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
 "use strict";
 /* AMBER / Geometry atlas. All positions are generated in three dimensions.
    Four moving assemblies: outer skin, inner machinery, signal bus, and lens. */
@@ -1267,20 +1267,21 @@ function makeStage(canvas) {
   function frame(now) {
     raf = 0;
     if (document.hidden || lost) return;
+    const target = { idle: 0, listening: 0.72, thinking: 1.04, speaking: 0.91, error: 0.17 }[mode] || 0;
     let active = !reduced.matches && auto,
       anim =
         active ||
-        mode !== "idle" ||
+        (!reduced.matches && mode !== "idle") ||
+        mode === "speaking" ||
         kick > 0.011 ||
         opening > 0.002 ||
         dirty ||
         Math.abs(yawGoal - yaw) + Math.abs(pitchGoal - pitch) + Math.abs(zoomGoal - zoom) > 0.0005;
-    const interval = gl ? (lean ? 1000 / 34 : 1000 / 48) : 1000 / 22;
+    const interval = reduced.matches ? 1000 / 14 : gl ? (lean ? 1000 / 34 : 1000 / 48) : 1000 / 22;
     if (anim && (dirty || now - lastDraw >= interval - 1)) {
       let dt = last < 0 ? 0.025 : Math.min(0.095, (now - last) / 1000);
       last = now;
       lastDraw = now;
-      const target = { idle: 0, listening: 0.72, thinking: 1.04, speaking: 0.91, error: 0.17 }[mode] || 0;
       let damp = 1 - Math.exp(-dt * 7);
       energy += (target - energy) * damp;
       // Real playback energy drives the lens; native system voices only expose
@@ -1308,8 +1309,8 @@ function makeStage(canvas) {
       else drawCPU(m);
       dirty = false;
     }
-    if (anim || energy > 0.015) {
-      if (!anim && energy > 0.015) dirty = true;
+    if (anim || Math.abs(target - energy) > 0.015) {
+      if (!anim) dirty = true;
       schedule();
     } else last = -1;
   }
@@ -1365,6 +1366,758 @@ function makeStage(canvas) {
     },
   };
 }
+/* COMPANION START — browser-only recipe book and short-lived dialogue state.
+   Learning produces data, never new code. Nothing is written on an ordinary turn. */
+function makeCompanion({ storage, language, now = Date.now, random = Math.random }) {
+  const KEY = "amber:companion:v1",
+    issue = "https://github.com/atulchoudhary7781-dot/Jarvis-AI/issues/new";
+  const W = (en, hi) => (language().startsWith("hi") ? hi : en);
+  const tidy = (s) =>
+    String(s || "")
+      .normalize("NFKC")
+      .replace(/’/g, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+  const key = (s) =>
+    tidy(s)
+      .toLowerCase()
+      .replace(/[।?!.]+$/u, "")
+      .trim();
+  const validWords = (s, n) =>
+    typeof s === "string" &&
+    s.length >= 2 &&
+    s.length <= n &&
+    s.split(" ").length <= 7 &&
+    /^[\p{L}\p{M}][\p{L}\p{M} ’'-]*$/u.test(s);
+  const reserved = (s) =>
+    /^(?:yes|no|ok|okay|haan|nahi|हाँ|हां|नहीं|hello|hi|hey|नमस्ते|start|stop|cancel|help|jarvis|जार्विस|turn off|mic|microphone|माइक|forget|remember|teach|learn|share|community skills|my skills|when i say|जब मैं|जब में|jab mai|कैंसल|भूल|सिख|मेरे शॉर्टकट|world headlines|नया शॉर्टकट)(?:\s|$)/iu.test(
+      s
+    );
+  const secret = (s) => /(?:password|passcode|secret|api key|phone number|पासवर्ड|गुप्त)/iu.test(s);
+  const nameOK = (s) => validWords(s, 44) && !reserved(key(s)) && !secret(s);
+  const nicknameOK = (s) => validWords(s, 25) && s.split(" ").length <= 3 && !secret(s);
+  const exact = (o, keys) =>
+    o &&
+    typeof o === "object" &&
+    !Array.isArray(o) &&
+    Object.keys(o).sort().join("|") === keys.slice().sort().join("|");
+  const safeCard = (s, limit) =>
+    typeof s === "string" &&
+    s === s.trim() &&
+    s.length >= 1 &&
+    s.length <= limit &&
+    /[\p{L}\p{N}]/u.test(s) &&
+    /^[\p{L}\p{M}\p{N} ,?!.'’():;।-]+$/u.test(s) &&
+    !/(?:https?:|www\.|\d{5,}|password|passcode|token|api key|पासवर्ड)/iu.test(s);
+  function validStep(s) {
+    if (!s || typeof s !== "object") return false;
+    if (["time", "date", "weather"].includes(s.kind))
+      return exact(s, ["kind", "city"]) && validWords(s.city, 48) && !secret(s.city);
+    if (s.kind === "headlines") return exact(s, ["kind"]);
+    if (s.kind === "quiz")
+      return exact(s, ["kind", "question", "answer"]) && safeCard(s.question, 125) && safeCard(s.answer, 48);
+    return (
+      s.kind === "timer" &&
+      exact(s, ["kind", "minutes"]) &&
+      Number.isInteger(s.minutes) &&
+      s.minutes >= 1 &&
+      s.minutes <= 120
+    );
+  }
+  const validRecipe = (r) =>
+    exact(r, ["phrase", "steps"]) &&
+    nameOK(r.phrase) &&
+    Array.isArray(r.steps) &&
+    r.steps.length >= 1 &&
+    r.steps.length <= 2 &&
+    r.steps.every(validStep) &&
+    (!r.steps.some((s) => ["timer", "quiz"].includes(s.kind)) || r.steps.length === 1);
+  const blank = () => ({ version: 1, name: "", skills: [], ideas: true });
+  let book = blank(),
+    catalog = [],
+    draft = null,
+    openable = null,
+    chatBeat = null,
+    counts = new Map(),
+    offered = new Set(),
+    lastPick = new Map();
+  try {
+    const str = storage().getItem(KEY);
+    if (str && str.length < 20000) {
+      const p = JSON.parse(str);
+      if (p?.version === 1) {
+        book.name = nicknameOK(p.name) ? p.name : "";
+        book.ideas = p.ideas !== false;
+        if (Array.isArray(p.skills)) book.skills = p.skills.filter(validRecipe).slice(0, 24);
+      }
+    }
+  } catch (_) {}
+  const save = () => {
+    try {
+      storage().setItem(KEY, JSON.stringify(book));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
+  const duration = (ok) =>
+    ok ? W("in this browser", "इस ब्राउज़र में") : W("for this page only", "सिर्फ़ इस खुले पेज के लिए");
+  const response = (text, extra = {}) => ({ text, ...extra });
+  const pending = (type, attrs = {}) => {
+    draft = { type, ...attrs, expires: now() + 180000 };
+  };
+  const yes = (q) =>
+    /^(yes(?: please)?|yep|yeah|sure|okay|ok|go ahead|save it|haan|han|ha|हाँ|हां|हाँ जी|हां जी|बिल्कुल|ठीक है|कर दो|याद रखो)$/u.test(
+      q
+    );
+  const no = (q) =>
+    /^(no(?: thanks)?|nope|not now|cancel(?: that| teaching)?|never mind|nahi|nahin|rehne do|नहीं|नही|अभी नहीं|रहने दो|रद्द करो)$/u.test(
+      q
+    );
+  const find = (arr, s) => arr.find((r) => key(r.phrase) === key(s));
+  const aliases = {
+    "सिटी डुएट": "city duet",
+    "फोकस स्प्रिंट": "focus sprint",
+    "फ़ोकस स्प्रिंट": "focus sprint",
+    "प्लैनेट पॉप क्विज़": "planet pop quiz",
+    "प्लैनेट पॉप क्विज": "planet pop quiz",
+    "dilli ki subah": "दिल्ली की सुबह",
+  };
+  const findAny = (s) =>
+    find(book.skills, s) ||
+    find(catalog, s) ||
+    (Object.hasOwn(aliases, key(s)) ? find(catalog, aliases[key(s)]) : null);
+  const title = (s) => s.replace(/(^| )[a-z]/g, (c) => c.toUpperCase());
+  const cityName = (s) => {
+    const t = tidy(s)
+      .replace(/\s+(?:please|batao|बताओ|बताइए|बताना)$/iu, "")
+      .trim();
+    return validWords(t, 48) && !secret(t) ? title(t) : "";
+  };
+  function parseStep(line) {
+    let q = key(line)
+      .replace(/^[,;:\s]+|[,;:\s]+$/g, "")
+      .replace(/[०-९]/g, (n) => String(n.charCodeAt(0) - 2406));
+    q = q.replace(
+      /\b(one|two|five|ten|fifteen|twenty five|twenty|thirty)\b(?=[ -]min)/g,
+      (v) => ({ one: 1, two: 2, five: 5, ten: 10, fifteen: 15, "twenty five": 25, twenty: 20, thirty: 30 })[v]
+    );
+    let m =
+      q.match(
+        /^(?:(?:start|set) (?:a |the )?)?(?:timer (?:for )?)?(\d{1,3})[ -]*(?:minutes?|mins?|मिनट)(?: (?:का |ka )?(?:timer|टाइमर)(?: लगाओ| lagao)?)?$/u
+      ) || q.match(/^(?:set|start) (?:a )?timer for (\d{1,3}) minutes?$/);
+    if (m) {
+      const s = { kind: "timer", minutes: Number(m[1]) };
+      return validStep(s) ? s : null;
+    }
+    if (
+      /^(?:(?:read|give me|play) (?:the )?)?(?:world news|world headlines|headlines|दुनिया की खबरें|दुनिया की ख़बरें|duniya ki khabrein)(?: sunao| सुनाओ)?$/.test(
+        q
+      )
+    )
+      return { kind: "headlines" };
+    m = q.match(
+      /^(?:(?:tell me|check|give me|show me|what is|what's|what) )?(?:the |today's )?(time|date|weather)(?: is it| like| forecast)? (?:in|for|at) (.+)$/u
+    );
+    if (m) {
+      const city = cityName(m[2]);
+      return city ? { kind: m[1], city } : null;
+    }
+    m = q.match(
+      /^(.+?) (?:ka|ki|का|की|ke|के) (mausam|mosam|मौसम|samay|समय|time|टाइम|tareekh|तारीख|तारीख़|date)(?: batao| बताओ| बताना)?$/u
+    );
+    if (m) {
+      const city = cityName(m[1]);
+      return city
+        ? {
+            kind: /mausam|mosam|मौसम/.test(m[2])
+              ? "weather"
+              : /date|tareekh|तारीख/.test(m[2])
+                ? "date"
+                : "time",
+            city,
+          }
+        : null;
+    }
+    m = q.match(/^(.+?) (?:mein|me|में) (?:abhi |अभी )?(?:kitne baje(?: hain| hai)?|कितने बजे(?: हैं| है)?)$/u);
+    if (m) {
+      const city = cityName(m[1]);
+      return city ? { kind: "time", city } : null;
+    }
+    return null;
+  }
+  function parseSteps(s) {
+    const parts = s.split(/\s+(?:and then|then|and|aur phir|aur|और फिर|और|फिर)\s+/iu);
+    if (parts.length > 2) return null;
+    const steps = parts.map(parseStep);
+    return steps.every(validStep) && (!steps.some((x) => x.kind === "timer") || steps.length === 1)
+      ? steps
+      : null;
+  }
+  function describe(steps) {
+    return steps
+      .map((s) => {
+        if (s.kind === "quiz")
+          return W(
+            `ask “${s.question}”, with the answer “${s.answer}”`,
+            `सवाल “${s.question}”, जवाब “${s.answer}”`
+          );
+        if (s.kind === "timer") return W(`a ${s.minutes} minute timer`, `${s.minutes} मिनट का टाइमर`);
+        if (s.kind === "headlines") return W("world headlines", "दुनिया की खबरें");
+        return W(
+          `${s.kind === "time" ? "the time" : s.kind === "date" ? "the date" : "the weather"} in ${s.city}`,
+          `${s.city} ${s.kind === "time" ? "का समय" : s.kind === "date" ? "की तारीख" : "का मौसम"}`
+        );
+      })
+      .join(W(", then ", " और फिर "));
+  }
+  const example = () =>
+    W(
+      "Try a city time, date or weather check, world headlines, or a timer in minutes. For example: weather in Delhi and time in London.",
+      "शहर का समय, तारीख, मौसम, दुनिया की खबरें या मिनटों का टाइमर सिखा सकते हो। जैसे, दिल्ली का मौसम और लंदन का समय।"
+    );
+  function confirmSkill(phrase, steps) {
+    if (!nameOK(phrase))
+      return response(
+        W(
+          "Pick a short nickname for the shortcut, not a control command or personal detail.",
+          "शॉर्टकट का छोटा अलग नाम रखो। कोई निजी जानकारी या माइक का आदेश मत रखो।"
+        )
+      );
+    if (!steps) return response(example());
+    const r = { phrase, steps };
+    if (!validRecipe(r)) return response(example());
+    if (findAny(phrase) && !find(book.skills, phrase))
+      return response(
+        W(
+          "That phrase already runs a community skill. Pick a different name.",
+          "इस नाम से सामुदायिक स्किल चलती है। कोई दूसरा नाम रखो।"
+        )
+      );
+    const old = find(book.skills, phrase);
+    if (!old && book.skills.length >= 24)
+      return response(
+        W(
+          "Your 24 slots are full. Forget one shortcut first.",
+          "तुम्हारे 24 शॉर्टकट पूरे हो गए। पहले एक शॉर्टकट भुला दो।"
+        )
+      );
+    pending("save", { r });
+    return response(
+      W(
+        `${old ? "Replace the old shortcut? " : ""}“${phrase}” would run ${describe(steps)}. Save it in this browser?`,
+        `${old ? "पुराना शॉर्टकट बदल दूँ? " : ""}“${phrase}” कहने पर ${describe(steps)}। इस ब्राउज़र में याद रखूँ?`
+      )
+    );
+  }
+  function list(arr, world) {
+    const head = world
+      ? W("From the shared shelf: ", "सामुदायिक स्किल हैं: ")
+      : W("Your shortcuts: ", "तुम्हारे शॉर्टकट हैं: ");
+    return response(
+      arr.length
+        ? head +
+            arr
+              .slice(0, 4)
+              .map((r) => r.phrase)
+              .join(", ") +
+            (arr.length > 4 ? W(`, and ${arr.length - 4} more.`, `, और ${arr.length - 4}।`) : ".") +
+            W(" Say a name to run it.", " चलाने के लिए उसका नाम बोलो।")
+        : world
+          ? W(
+              "The shared shelf is unavailable here. Your personal shortcuts still work.",
+              "यहाँ सामुदायिक सूची नहीं मिली। अपने शॉर्टकट फिर भी चला सकते हो।"
+            )
+          : W(
+              "No saved shortcuts yet. Say “teach a shortcut” and we’ll make one.",
+              "अभी कोई शॉर्टकट नहीं है। बोलो, नया शॉर्टकट, फिर साथ में बनाते हैं।"
+            )
+    );
+  }
+  function choose(bucket, rows) {
+    let i = Math.floor(random() * rows.length);
+    if (i === lastPick.get(bucket)) i = (i + 1) % rows.length;
+    lastPick.set(bucket, i);
+    return rows[i];
+  }
+  const beats = (type, extra = {}) => {
+    chatBeat = { type, ...extra, expires: now() + 150000 };
+  };
+  const riddles = [
+    [
+      "What gets wetter while it dries something else?",
+      "किसी और को सुखाते हुए ख़ुद कौन भीगता है?",
+      "Think of something in a bathroom.",
+      "बाथरूम में मिल जाएगा।",
+      "a towel",
+      "तौलिया",
+      /^(?:(?:a|the) )?(?:towel|tauliya|तौलिया)$/u,
+    ],
+    [
+      "What has hands and a face, but cannot clap?",
+      "किसका चेहरा और दो हाथ हैं, पर वह ताली नहीं बजा सकती?",
+      "Its hands go round.",
+      "उसके हाथ गोल घूमते हैं।",
+      "a clock",
+      "घड़ी",
+      /^(?:(?:a|the) )?(?:clock|watch|ghadi|घड़ी|घड़ी)$/u,
+    ],
+    [
+      "What gets bigger the more you take out of it?",
+      "किसमें से जितना निकालो, वह उतना ही बड़ा होता है?",
+      "Picture a spade and some soil.",
+      "फावड़ा और मिट्टी सोचो।",
+      "a hole",
+      "गड्ढा",
+      /^(?:(?:a|the) )?(?:hole|pit|gaddha|गड्ढा|गड्ढे)$/u,
+    ],
+  ];
+  const stripWake = (s) =>
+    tidy(s).replace(/^(?:(?:hey|ok|okay|हे|ओके)\s+)?(?:jarvis|जार्विस|जारविस|जर्विस)[\s,:।.!-]*/iu, "");
+  function riddle() {
+    const row = choose("puzzle", riddles);
+    beats("puzzle", { row });
+    return response(W(row[0], row[1]), { chat: true });
+  }
+  function idea() {
+    const row = choose("idea", [
+      [
+        "Pick the nearest object. If it could leave a two-word note on your desk, what would it say?",
+        "पास रखी कोई चीज़ चुनो। अगर वह तुम्हारे लिए दो शब्दों का नोट छोड़ती, तो क्या लिखती?",
+      ],
+      [
+        "Let’s invent a tiny café. Mine only serves things that crunch. What would yours be known for?",
+        "एक छोटा सा कैफ़े सोचते हैं। मेरे वाले में सिर्फ़ कुरकुरी चीज़ें मिलेंगी। तुम्हारे कैफ़े की ख़ासियत क्या होगी?",
+      ],
+      [
+        "Take one ordinary moment from today and give it a movie title. What happened in your scene?",
+        "आज का कोई मामूली सा पल चुनो और उसे फ़िल्म का नाम दो। तुम्हारे सीन में क्या हुआ?",
+      ],
+    ]);
+    return response(W(...row), { chat: true });
+  }
+  function handle(raw) {
+    let plain = tidy(raw)
+      .replace(/^(?:(?:hey|ok|okay|हे|ओके)\s+)?(?:jarvis|जार्विस|जारविस|जर्विस)[\s,:।.!-]*/iu, "")
+      .replace(/[.!?।]+$/u, "")
+      .trim();
+    const q = key(plain);
+    if (draft && draft.expires < now()) draft = null;
+    if (chatBeat && chatBeat.expires < now()) chatBeat = null;
+    openable = null;
+    if (draft && no(q)) {
+      draft = null;
+      return response(W("No problem. I’ll leave it as it was.", "ठीक है, जैसा था वैसा ही रहने देता हूँ।"));
+    }
+    if (draft) {
+      const d = draft;
+      draft = null;
+      if (d.type === "save" && yes(q)) {
+        book.skills = book.skills.filter((r) => key(r.phrase) !== key(d.r.phrase));
+        book.skills.push(d.r);
+        const where = duration(save());
+        return response(
+          W(`Got it. “${d.r.phrase}” is saved ${where}.`, `“${d.r.phrase}” ${where} याद रख लिया।`)
+        );
+      }
+      if (d.type === "nickname" && yes(q)) {
+        book.name = d.name;
+        const place = duration(save());
+        return response(
+          W(
+            `Nice to meet you, ${book.name}. I’ll remember your name ${place}.`,
+            `${book.name}, मिलकर अच्छा लगा। नाम ${place} याद रखूँगा।`
+          )
+        );
+      }
+      if (d.type === "wipe" && yes(q)) {
+        book = blank();
+        let cleared = true;
+        try {
+          storage().removeItem(KEY);
+        } catch (_) {
+          cleared = false;
+        }
+        counts.clear();
+        offered.clear();
+        chatBeat = null;
+        return response(
+          cleared
+            ? W(
+                "Your saved name and shortcuts are cleared from this browser.",
+                "इस ब्राउज़र से तुम्हारा नाम और शॉर्टकट हटा दिए।"
+              )
+            : W(
+                "Cleared for this page. Site storage is blocked; use browser settings to clear any older copy.",
+                "इस पेज से हटा दिया। पुराना डेटा मिटाने के लिए ब्राउज़र की साइट सेटिंग देखो।"
+              ),
+          { clearHistory: true }
+        );
+      }
+      if (d.type === "offer" && yes(q)) {
+        pending("offered-name", { steps: d.steps });
+        return response(W("What should we call that shortcut?", "उस शॉर्टकट का नाम क्या रखें?"));
+      }
+      if (d.type === "offered-name") return confirmSkill(plain, d.steps);
+      if (d.type === "quiz-name") {
+        if (!nameOK(plain)) {
+          pending("quiz-name");
+          return response(W("Try a short, non-personal name for the quiz.", "क्विज़ का छोटा सा अलग नाम बताओ।"));
+        }
+        pending("quiz-question", { phrase: plain });
+        return response(
+          W("What question should I ask? Leave out private details.", "क्या सवाल पूछूँ? कोई निजी जानकारी मत बताना।")
+        );
+      }
+      if (d.type === "quiz-question") {
+        const question =
+          tidy(raw)
+            .replace(/[?।.]+$/u, "")
+            .trim() + "?";
+        if (!safeCard(question, 125)) {
+          pending("quiz-question", { phrase: d.phrase });
+          return response(
+            W(
+              "Use one short, plain question, without links or personal details.",
+              "एक छोटा सा सवाल बताओ, बिना लिंक या निजी जानकारी के।"
+            )
+          );
+        }
+        pending("quiz-answer", { phrase: d.phrase, question });
+        return response(W("And what answer should I check for?", "और उसका छोटा सा जवाब क्या होगा?"));
+      }
+      if (d.type === "quiz-answer") {
+        if (!safeCard(plain, 48)) {
+          pending("quiz-answer", { phrase: d.phrase, question: d.question });
+          return response(
+            W("Try a short answer without private details.", "बिना निजी जानकारी का छोटा जवाब बताओ।")
+          );
+        }
+        return confirmSkill(d.phrase, [{ kind: "quiz", question: d.question, answer: plain }]);
+      }
+      if (d.type === "ask-name" && !nameOK(plain)) {
+        pending("ask-name");
+        return response(W("Pick a short phrase that is not a control command.", "कोई अलग, छोटा नाम रखो।"));
+      }
+      if (d.type === "ask-name" && nameOK(plain)) {
+        pending("ask-action", { phrase: plain });
+        return response(
+          W(
+            `What should “${plain}” do? For example, time in Tokyo.`,
+            `“${plain}” कहने पर क्या करूँ? जैसे, टोक्यो का समय।`
+          )
+        );
+      }
+      if (d.type === "ask-action") {
+        const s = parseSteps(plain);
+        if (s) return confirmSkill(d.phrase, s);
+        pending("ask-action", { phrase: d.phrase });
+        return response(example());
+      }
+      if (d.type === "share" && (yes(q) || /^(?:prepare draft|draft banao|ड्राफ्ट बनाओ)$/.test(q))) {
+        const u = new URL(issue);
+        u.searchParams.set("template", "community-skill.md");
+        u.searchParams.set("title", "Skill proposal: " + d.r.phrase);
+        u.searchParams.set(
+          "body",
+          "I would like to propose this public shortcut for maintainer review.\n\n```json\n" +
+            JSON.stringify(d.r, null, 2) +
+            "\n```\n\nPlease check that the phrase and actions are useful and contain no private information before submitting."
+        );
+        openable = { href: u.href, expires: now() + 120000 };
+        return response(
+          W(
+            "Mic off. Tap the core or press S after I finish to review the GitHub draft. Nothing is posted until you submit it.",
+            "माइक बंद है। मेरे बोलने के बाद कोर पर टैप करो या एस दबाओ। गिटहब पर ड्राफ्ट देखकर ख़ुद सबमिट करोगे तभी वह साझा होगा।"
+          ),
+          { disarm: true }
+        );
+      }
+      // A new request abandons an unanswered yes/no prompt; it is never consent.
+    }
+    if (/^(?:teach (?:a |you a )?quiz|make a quiz|naya quiz|नया क्विज़|नया क्विज|क्विज़ सिखाऊँ)$/.test(q)) {
+      pending("quiz-name");
+      return response(
+        W(
+          "Let’s make a practice question. What should we call this quiz?",
+          "चलो एक सवाल बनाते हैं। इस क्विज़ का नाम क्या रखें?"
+        )
+      );
+    }
+    let m =
+      plain.match(/^when i say\s+(.+?)(?:\s*[,;:]\s*|\s+then\s+)(.+)$/iu) ||
+      plain.match(
+        /^(?:jab (?:main|mein|mai)|जब (?:मैं|में|मै))\s+(.+?)\s+(?:bolu[nm]?|boloon|kahu[nm]?|बोलूँ|बोलूं|बोलू|कहूँ|कहूं|कहू)[\s,]+(?:(?:तो|toh?|tab|तब)\s+)?(.+)$/iu
+      );
+    if (m) return confirmSkill(tidy(m[1]), parseSteps(m[2]));
+    if (
+      /^(?:teach (?:you )?(?:(?:a|new) )?(?:skill|shortcut)|learn a (?:skill|shortcut)|naya shortcut|नया शॉर्टकट|नई स्किल सीखो|शॉर्टकट सीखो)$/.test(
+        q
+      )
+    ) {
+      pending("ask-name");
+      return response(
+        W("Let’s make one. What short phrase do you want to say?", "चलो बनाते हैं। किस छोटे नाम से उसे बुलाना चाहोगे?")
+      );
+    }
+    if (/^(?:when i say|jab (?:main|mai)|जब मैं)\s/.test(q))
+      return response(
+        W(
+          "Try: when I say match day, then time in London. Or say “teach a shortcut” and I’ll ask one step at a time.",
+          "ऐसे कहो: जब मैं मैच डे बोलूँ तो लंदन का समय। या बोलो, नया शॉर्टकट।"
+        )
+      );
+    m = plain.match(/^(?:please )?call me (.+)$/iu) || plain.match(/^(?:mujhe|मुझे) (.+?) (?:bulao|बुलाओ)$/iu);
+    if (m) {
+      if (!nicknameOK(tidy(m[1])))
+        return response(
+          W("A short nickname works. No private details needed.", "एक छोटा नाम काफ़ी है। निजी जानकारी मत बताओ।")
+        );
+      pending("nickname", { name: tidy(m[1]) });
+      return response(
+        W(
+          `Call you ${tidy(m[1])}? Should I remember that in this browser?`,
+          `तुम्हें ${tidy(m[1])} बुलाऊँ? यह नाम इस ब्राउज़र में याद रखूँ?`
+        )
+      );
+    }
+    if (/^(?:what(?:'s| is) my name|mera naam kya hai|मेरा नाम क्या है)$/.test(q))
+      return response(
+        book.name
+          ? W(`You asked me to call you ${book.name}.`, `तुमने कहा था कि तुम्हें ${book.name} बुलाऊँ।`)
+          : W(
+              "You haven’t saved a name here. What would you like me to call you? Say “call me” and a nickname.",
+              "यहाँ कोई नाम याद नहीं है। चाहो तो कहो, मुझे अमन बुलाओ।"
+            )
+      );
+    if (/^(?:forget everything|clear my memory|sab bhool jao|सब भूल जाओ|सब भूल जाओगे)$/.test(q)) {
+      pending("wipe");
+      return response(
+        W(
+          "Clear your saved name, personal shortcuts and suggestion preference in this browser? Say yes to erase them.",
+          "इस ब्राउज़र से नाम, अपने शॉर्टकट और सुझावों की सेटिंग हटा दूँ? मिटाने के लिए हाँ कहो।"
+        )
+      );
+    }
+    if (/^(?:forget my name|mera naam bhool jao|मेरा नाम भूल जाओ)$/.test(q)) {
+      book.name = "";
+      const saved = save();
+      return response(W(`I’ve forgotten your name ${duration(saved)}.`, `नाम ${duration(saved)} हटा दिया।`), {
+        clearHistory: true,
+      });
+    }
+    if (/^(?:my (?:skills|shortcuts)|list my (?:skills|shortcuts)|mere shortcut|मेरे शॉर्टकट|मेरी स्किल्स)$/.test(q))
+      return list(book.skills, false);
+    if (
+      /^(?:community skills|shared skills|worldwide skills|community ki skills|सामुदायिक स्किल|कम्युनिटी स्किल्स)$/.test(
+        q
+      )
+    )
+      return list(catalog, true);
+    m = q.match(/^(?:forget (?:skill|shortcut)|bhool jao|शॉर्टकट भूलो) (.+)$/u);
+    if (m) {
+      const r = find(book.skills, m[1]);
+      if (!r)
+        return response(W("I don’t have a personal shortcut by that name.", "इस नाम का अपना शॉर्टकट नहीं मिला।"));
+      book.skills = book.skills.filter((x) => x !== r);
+      const where = duration(save());
+      return response(W(`Removed “${r.phrase}” ${where}.`, `“${r.phrase}” ${where} हटा दिया।`));
+    }
+    m = q.match(
+      /^(?:share (?:skill|shortcut)|share my (?:skill|shortcut)|स्किल शेयर करो|शॉर्टकट साझा करो) (.+)$/u
+    );
+    if (m) {
+      const r = find(book.skills, m[1]);
+      if (!r)
+        return response(
+          W(
+            "Only a shortcut you saved here can be proposed. Try “my shortcuts”.",
+            "सिर्फ़ अपना सहेजा हुआ शॉर्टकट सुझा सकते हो। बोलो, मेरे शॉर्टकट।"
+          )
+        );
+      pending("share", { r });
+      return response(
+        W(
+          `GitHub issues are public. The draft would share only “${r.phrase}”: ${describe(r.steps)}. Prepare that draft?`,
+          `गिटहब का प्रस्ताव सार्वजनिक होगा। सिर्फ़ “${r.phrase}”: ${describe(r.steps)} लिखा जाएगा। ड्राफ्ट तैयार करूँ?`
+        )
+      );
+    }
+    if (
+      /^(?:suggestions off|no suggestions|सुझाव बंद करो|sujhav band karo|suggestions on|सुझाव चालू करो|sujhav chalu karo)$/.test(
+        q
+      )
+    ) {
+      book.ideas = / on|चालू|chalu/.test(q);
+      save();
+      return response(
+        book.ideas
+          ? W("Sure. I can suggest shortcuts during our conversation.", "ठीक है, बातचीत में काम के शॉर्टकट सुझाऊँगा।")
+          : W(
+              "Sure. No more shortcut suggestions unless you turn them back on.",
+              "ठीक है, अब अपनी तरफ़ से शॉर्टकट नहीं सुझाऊँगा।"
+            )
+      );
+    }
+    const recipe = findAny(q);
+    if (recipe) {
+      if (recipe.steps[0].kind === "quiz") {
+        const step = recipe.steps[0];
+        beats("quiz", { step });
+        return response(step.question);
+      }
+      return { recipe, personal: !!find(book.skills, q) };
+    }
+    if (chatBeat) {
+      const b = chatBeat;
+      chatBeat = null;
+      if (b.type === "quiz" && !parseStep(plain) && !no(q)) {
+        const ans = (s) => key(s).replace(/^(?:a |an |the )/, "");
+        const win = ans(plain) === ans(b.step.answer);
+        return response(
+          win
+            ? W(`You got it: ${b.step.answer}.`, `सही पहचाना: ${b.step.answer}।`)
+            : W(`The answer on this card is ${b.step.answer}.`, `इस कार्ड का जवाब है ${b.step.answer}।`)
+        );
+      }
+      if (b.type === "again" && yes(q)) return riddle();
+      if (b.type === "puzzle") {
+        if (/^(?:hint|a hint|give me a hint|संकेत|हिंट|इशारा दो|hint do)$/.test(q)) {
+          beats("puzzle", { row: b.row });
+          return response(W(b.row[2], b.row[3]), { chat: true });
+        }
+        if (b.row[6].test(q))
+          return response(
+            W(
+              `Exactly, ${b.row[4]}! Your turn to stump me.`,
+              `बिल्कुल, ${b.row[5]}! अब तुम्हारी बारी, मुझे कोई पहेली दो।`
+            ),
+            { chat: true }
+          );
+        if (
+          /^(?:pass|i give up|tell me|the answer|answer|pata nahin|batao|बताओ|जवाब|पता नहीं|हार मान ली)$/.test(q)
+        ) {
+          beats("again");
+          return response(W(`It’s ${b.row[4]}. Want another riddle?`, `जवाब है ${b.row[5]}। एक और पहेली सुनोगे?`), {
+            chat: true,
+          });
+        }
+      }
+      if (b.type === "rough" && /^(?:talk|let's talk|baat|बात|बात करते हैं|सुनो)$/.test(q))
+        return response(
+          W(
+            "I’m listening. Which part of today has been sticking with you?",
+            "सुन रहा हूँ। आज की कौन सी बात अब तक मन में अटकी है?"
+          ),
+          { chat: true }
+        );
+      if (b.type === "rough" && /^(?:distraction|a distraction|break|ब्रेक|कुछ और|kuch aur)$/.test(q))
+        return riddle();
+    }
+    if (
+      /^(?:hello(?: there| friend| buddy| bhai| yaar)?|hi(?: there| buddy| friend| bhai| yaar)?|hey(?: there| buddy| friend| bhai| yaar)?|namaste|namaskar|नमस्ते|नमस्कार|हेलो|हैलो|हाय)(?: यार| दोस्त| भाई)?$/.test(
+        q
+      )
+    ) {
+      const n = book.name ? `, ${book.name}` : "";
+      const row = choose("hi", [
+        [`Hey${n}! How’s your day going?`, `अरे${n}! आज दिन कैसा जा रहा है?`],
+        [`Good to hear from you${n}. What’s on your mind?`, `अरे${n}, बताओ। आज दिमाग़ में क्या चल रहा है?`],
+      ]);
+      return response(W(...row), { chat: true });
+    }
+    if (
+      /^(?:badhiya|mast|बहुत बढ़िया|बढ़िया|मस्त|काफ़ी अच्छा|काफी अच्छा|pretty good|really good|my day was great)$/.test(
+        q
+      )
+    )
+      return response(W("Nice. What made it a good one?", "अच्छा लगा सुनकर। ऐसा क्या हुआ कि दिन बढ़िया हो गया?"), {
+        chat: true,
+      });
+    if (
+      /^(?:how are you(?: doing)?|what's up|kaise ho(?: yaar)?|kya haal (?:hai|hain)|कैसे हो(?: यार)?|क्या हाल है)$/.test(
+        q
+      )
+    )
+      return response(
+        W(
+          "Ready for a chat. What’s been the best bit of your day so far?",
+          "बातचीत के लिए तैयार हूँ। आज अब तक सबसे अच्छी बात क्या हुई?"
+        ),
+        { chat: true }
+      );
+    if (
+      /^(?:i(?:'m| am) (?:sad|stressed|feeling low)|i(?:'ve)? had a (?:bad|rough|hard) day|mood off hai|mera mood off hai|मूड ऑफ है|आज दिन खराब था|मन उदास है)$/.test(
+        q
+      )
+    ) {
+      beats("rough");
+      return response(
+        W(
+          "That sounds rough. Want to talk about it, or would a little distraction feel better?",
+          "सुनकर बुरा लगा। उसके बारे में बात करना चाहोगे या थोड़ी देर मन कहीं और लगाएँ?"
+        ),
+        { chat: true }
+      );
+    }
+    if (
+      /^(?:riddle|another riddle|tell me a riddle|let's play a riddle|paheli(?: sunao)?|पहेली(?: सुनाओ)?|एक और पहेली)$/.test(
+        q
+      )
+    )
+      return riddle();
+    if (
+      /^(?:surprise me|give me an idea|something fun|another idea|i(?:'m| am) bored|kuch naya batao|apni taraf se kuch batao|कुछ नया बताओ|अपनी तरफ से कुछ बताओ|अपनी तरफ़ से कुछ बताओ|बोर हो रहा हूँ)$/.test(
+        q
+      )
+    )
+      return idea();
+    if (/^(?:thanks(?: a lot| buddy| yaar)?|thank you|शुक्रिया|धन्यवाद|shukriya|थैंक यू)$/.test(q))
+      return response(W("Anytime.", "जब चाहो।"), { chat: true });
+    return null;
+  }
+  return {
+    handle,
+    describe,
+    reset() {
+      draft = openable = chatBeat = null;
+      counts.clear();
+      offered.clear();
+    },
+    updateCatalog(list) {
+      if (Array.isArray(list) && list.length <= 64) catalog = list.filter(validRecipe);
+    },
+    takeReview() {
+      const u = openable;
+      openable = null;
+      return u && u.expires >= now() ? u.href : "";
+    },
+    observe(raw, result) {
+      if (!book.ideas || !["time", "date", "weather"].includes(result?.topic)) return "";
+      const step = parseStep(stripWake(raw));
+      if (!validStep(step) || step.kind !== result.topic) return "";
+      const k = JSON.stringify(step).toLowerCase();
+      if (
+        book.skills.some((r) => r.steps.length === 1 && JSON.stringify(r.steps[0]).toLowerCase() === k) ||
+        offered.has(k) ||
+        offered.size >= 1
+      )
+        return "";
+      const n = (counts.get(k) || 0) + 1;
+      if (counts.size >= 12 && !counts.has(k)) counts.delete(counts.keys().next().value);
+      counts.set(k, n);
+      if (n !== 2) return "";
+      offered.add(k);
+      pending("offer", { steps: [step] });
+      return W(
+        " You’ve checked that twice. Want to give it a shortcut name?",
+        " ये दो बार पूछा है। इसके लिए छोटा सा शॉर्टकट बना लें?"
+      );
+    },
+  };
+}
+/* COMPANION END */
+
 /* Conversation controller: OFF → LISTEN → LOOK UP → PLAY → LISTEN. The first
    gesture is the only automatic-rearm consent. It is never stored or carried
    into another tab/load. A recognizer is never reused for another turn. */
@@ -1415,6 +2168,48 @@ function makeStage(canvas) {
     fallbackUntil = 0;
   const pending = new Map(),
     synth = window.speechSynthesis;
+  const friend = makeCompanion({ storage: () => window.localStorage, language: () => locale });
+  const TERMS = "gemma-2026-04-01";
+  let acceptedTerms = "",
+    termsTurn = null;
+  try {
+    acceptedTerms = sessionStorage.getItem("amber:chat:terms") === TERMS ? TERMS : "";
+  } catch (_) {}
+  let catalogNext = 0;
+  async function refreshShelf() {
+    if (transport !== "http" || Date.now() < catalogNext) return;
+    catalogNext = Date.now() + 600000;
+    const ctrl = new AbortController(),
+      tm = setTimeout(() => ctrl.abort(), 4500);
+    try {
+      const r = await fetch(new URL("api/community-skills", location.href), {
+        credentials: "same-origin",
+        signal: ctrl.signal,
+      });
+      if (!r.ok) throw Error();
+      const data = await r.json();
+      if (data?.version === 1) friend.updateCatalog(data.skills);
+    } catch (_) {
+      catalogNext = Date.now() + 60000;
+    } finally {
+      clearTimeout(tm);
+    }
+  }
+  void refreshShelf();
+  function noteChat(input, reply) {
+    past.push(
+      { role: "user", content: input.slice(0, 240) },
+      { role: "assistant", content: reply.slice(0, 380) }
+    );
+    past = past.slice(-4);
+  }
+  function reviewDraft() {
+    const href = friend.takeReview();
+    if (!href) return false;
+    cancel();
+    window.open(href, "_blank", "noopener,noreferrer");
+    return true;
+  }
   // Prime only the inventory; this neither plays sound nor opens the microphone.
   try {
     synth?.getVoices();
@@ -1495,6 +2290,8 @@ function makeStage(canvas) {
   function cancel() {
     setArmed(false);
     invalidate();
+    friend.reset();
+    termsTurn = null;
     follow = "";
     past = [];
     lastTopic = "";
@@ -1608,6 +2405,7 @@ function makeStage(canvas) {
       zone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
       pending: follow,
       history: past.slice(-4),
+      chatTerms: acceptedTerms,
     };
     follow = "";
     if (transport === "http" || transport === "component") return rpc("command", command, tok, 30000);
@@ -1954,6 +2752,8 @@ function makeStage(canvas) {
   }
   useLanguage(locale, false);
   function toggle() {
+    if (!armed && phase === "idle" && reviewDraft()) return;
+    void refreshShelf();
     if (armed || phase !== "idle") {
       cancel();
       announce(words("Microphone off.", "माइक बंद है।"));
@@ -2114,7 +2914,43 @@ function makeStage(canvas) {
     speak(words("I am Jarvis. This is my new speaking voice.", "मैं जार्विस हूँ। आप मेरी नई आवाज़ सुन रहे हैं।"));
   }
   const deDigit = (s) => s.replace(/[०-९]/g, (n) => String(n.charCodeAt(0) - 2406));
-  function local(q) {
+  async function runRecipe(r, tok) {
+    if (tok !== ticket) return;
+    if (r.steps[0].kind === "timer") {
+      local(`set a timer for ${r.steps[0].minutes} minutes`, "", tok, true);
+      return;
+    }
+    follow = "";
+    lastTopic = "";
+    state("thinking");
+    announce(words("Checking that for you.", "पता करता हूँ।"));
+    const bits = [];
+    let result = null;
+    try {
+      for (const step of r.steps) {
+        const query = step.kind === "headlines" ? "world headlines" : `${step.kind} in ${step.city}`;
+        result = await api(query, tok);
+        if (tok !== ticket) return;
+        if (!result || typeof result.text !== "string") throw Error("reply");
+        bits.push(result.text);
+      }
+      if (result) {
+        lastTopic = ["time", "weather", "date"].includes(result.topic) ? result.topic : "";
+        topicAt = performance.now();
+      }
+      speak(bits.join(" "), locale, tok);
+    } catch (_) {
+      if (tok === ticket)
+        speak(
+          [...bits, words("I couldn’t finish that lookup just now.", "अभी बाकी जानकारी नहीं मिल पाई।")].join(
+            " "
+          ),
+          locale,
+          tok
+        );
+    }
+  }
+  function local(q, raw, tok, fromRecipe = false) {
     if (
       /^(?:(?:please|बस|प्लीज़)[ ,]+)?(?:stop listening|turn (?:the )?(?:mic(?:rophone)? )?off|switch off (?:the )?mic(?:rophone)?|end (?:the )?conversation|go to sleep|(?:mic|mike|माइक|माईक|माइक्रोफोन|माइक्रोफ़ोन|मिक|conversation|बातचीत|सुनना) (?:band|बंद|बन्द|off|ऑफ|ऑफ़)(?: (?:kar(?:o)?|कर|करो))?(?: (?:do|दो|dijiye|दीजिए))?|so jao|सो जाओ|चुप हो जाओ)$/i.test(
         q
@@ -2136,11 +2972,24 @@ function makeStage(canvas) {
       useLanguage("hi-IN");
       return true;
     }
-    if (/^(?:help|commands|madad|मदद|मदद करो|क्या कर सकते हो|what can you do|hello|hi|नमस्ते|हेलो)$/i.test(q)) {
+    if (!fromRecipe) {
+      const action = friend.handle(raw);
+      if (action) {
+        if (action.disarm) setArmed(false);
+        if (action.clearHistory) past = [];
+        if (action.recipe) void runRecipe(action.recipe, tok);
+        else {
+          if (action.chat) noteChat(raw, action.text);
+          speak(action.text, locale, tok);
+        }
+        return true;
+      }
+    }
+    if (/^(?:help|commands|madad|मदद|मदद करो|क्या कर सकते हो|what can you do)$/.test(q)) {
       speak(
         words(
-          "At your service. Try: time in Tokyo, weather in Delhi, world headlines, or set a timer for one minute. When I finish, just ask your next question.",
-          "मैं तैयार हूँ। बोलिए, टोक्यो में कितने बजे हैं, दिल्ली का मौसम बताओ, दुनिया की खबरें सुनाओ, या एक मिनट का टाइमर लगाओ। मेरे जवाब के बाद सीधे अगला सवाल पूछिए।"
+          "We can chat, look something up, or invent a shortcut together. Try: surprise me, or teach a shortcut.",
+          "बात करें, कुछ पता लगाएँ या अपना शॉर्टकट बनाएँ? बोलकर देखो, कुछ नया बताओ, या नया शॉर्टकट।"
         )
       );
       return true;
@@ -2256,6 +3105,7 @@ function makeStage(canvas) {
     if (tok !== ticket) return;
     releaseInput();
     clearTimeout(recordLimit);
+    void refreshShelf();
     let text = raw.trim().slice(0, 360);
     let q = text
       .replace(/^(?:(?:hey|okay|ok|हे|ओके)\s+)?(?:jarvis|जार्विस|जारविस|जर्विस)[\s,.:।!-]*/i, "")
@@ -2268,7 +3118,32 @@ function makeStage(canvas) {
       speak(words("Yes? What would you like to know?", "जी, बोलिए। क्या जानना चाहेंगे?"));
       return;
     }
-    if (local(q)) {
+    if (termsTurn) {
+      const requested = termsTurn;
+      termsTurn = null;
+      if (
+        requested.until > Date.now() &&
+        /^(?:yes|yes please|i agree|agree|okay|haan|han|हाँ|हां|मंज़ूर है|मंजूर है|ठीक है)$/.test(q)
+      ) {
+        acceptedTerms = TERMS;
+        try {
+          sessionStorage.setItem("amber:chat:terms", TERMS);
+        } catch (_) {}
+        return execute(requested.text, tok);
+      }
+      if (/^(?:no|no thanks|nahin|nahi|नहीं|नही|बाद में|not now)$/.test(q)) {
+        speak(
+          words(
+            "No problem. We can still play a riddle, make shortcuts or check a city clock.",
+            "कोई बात नहीं। पहेलियाँ, शॉर्टकट और शहरों की जानकारी फिर भी मिलेंगी।"
+          ),
+          locale,
+          tok
+        );
+        return;
+      }
+    }
+    if (local(q, text, tok)) {
       follow = "";
       lastTopic = "";
       return;
@@ -2295,14 +3170,14 @@ function makeStage(canvas) {
       const result = await api(lookup, tok);
       if (tok !== ticket) return;
       if (!result || typeof result.text !== "string") throw Error("reply");
+      if (result.source === "Chat terms" && result.terms === TERMS)
+        termsTurn = { text, until: Date.now() + 180000 };
       follow = result.follow || "";
       lastTopic = ["time", "weather", "date"].includes(result.topic) ? result.topic : "";
       topicAt = performance.now();
-      if (result.source === "OpenRouter") {
-        past.push({ role: "user", content: text }, { role: "assistant", content: result.text.slice(0, 440) });
-        past = past.slice(-4);
-      }
-      speak(result.text, result.lang || locale, tok);
+      if (["OpenRouter", "Companion", "Built-in chat"].includes(result.source)) noteChat(text, result.text);
+      const hint = friend.observe(lookup, result);
+      speak(result.text + hint, result.lang || locale, tok);
     } catch (_) {
       if (tok === ticket)
         speak(
@@ -2321,6 +3196,7 @@ function makeStage(canvas) {
     invalidate();
     unlock();
     if (!allowed()) return;
+    void refreshShelf();
     ticket++;
     typed = true;
     field.value = "";
@@ -2442,6 +3318,12 @@ function makeStage(canvas) {
     } else if (k === "h" || k === "e") {
       unlock();
       switchLanguage(k === "h" ? "hi-IN" : "en-IN");
+    } else if (k === "l" && transport === "http") {
+      e.preventDefault();
+      cancel();
+      window.open(new URL("terms", location.href).href, "_blank", "noopener,noreferrer");
+    } else if (k === "s" && !armed && phase === "idle") {
+      if (reviewDraft()) e.preventDefault();
     } else if (k === "v") {
       e.preventDefault();
       previewVoice();
