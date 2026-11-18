@@ -1,135 +1,132 @@
-"""
-JARVIS AI — Simple Working Version
-===================================
+"""Streamlit entrypoint for the existing Jarvis-AI repository.
+
+The frontend is a stable keyed, bidirectional component: no nested page reload
+on a voice reply. Only the canvas is visible. The parent handles public lookups
+and authenticated, optionally paid, conversation; no secrets go into the frame.
 """
 
 import os
-import requests
+import re
+import time
+from pathlib import Path
+
 import streamlit as st
+import streamlit.components.v1 as components
+from hologram.skills import MAX_QUERY, RateLimit, answer, reply
 
-# Page Config
 st.set_page_config(
-    page_title="JARVIS",
-    page_icon="⚡",
-    layout="wide"
+    page_title="J.A.R.V.I.S.",
+    page_icon="🟠",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+    menu_items={"Get help": None, "Report a Bug": None, "About": None},
 )
+st.html("""<style>
+html,body,#root,[data-testid="stApp"],[data-testid="stAppViewContainer"],[data-testid="stMain"]{background:#020305!important;overflow:hidden!important}
+[data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stDecoration"],[data-testid="stStatusWidget"],[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],#MainMenu,footer{display:none!important}
+[data-testid="stMainBlockContainer"],.block-container{margin:0!important;padding:0!important;max-width:none!important;width:100%!important;height:100dvh}
+[data-testid="stVerticalBlock"]{gap:0!important}iframe[title*="amber_core"],[data-testid="stCustomComponentV1"] iframe{position:fixed!important;inset:0!important;display:block;z-index:2;width:100vw!important;height:100vh!important;height:100dvh!important;border:0!important;background:#020305!important}
+</style>""")
 
-# Simple CSS
-st.markdown("""
-<style>
-.stApp {
-    background-color: #000000;
-}
-[data-testid="stSidebar"] {
-    background-color: #0a0a0a;
-}
-</style>
-""", unsafe_allow_html=True)
 
-# API Key
-API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+def setting(key, default=""):
+    if key in os.environ:
+        return os.environ[key]
+    try:
+        return st.secrets.get(key, default)
+    except (FileNotFoundError, KeyError):
+        return default
 
-# Session State
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
-# Sidebar
-with st.sidebar:
-    st.title("⚡ JARVIS")
-    st.caption("Just A Rather Very Intelligent System")
-    
-    if st.button("🗑️ Clear Chat"):
-        st.session_state.messages = []
-        st.rerun()
-    
-    st.divider()
-    
-    st.markdown("**Status:** 🟢 Online")
-    st.markdown(f"**Messages:** {len(st.session_state.messages)}")
+@st.cache_resource
+def public_limit():
+    return RateLimit(70, 60)
 
-# Header
-col1, col2, col3 = st.columns([1, 3, 1])
-with col1:
-    st.empty()
-with col2:
-    st.markdown("<h2 style='text-align:center; color:white;'>⚡ J A R V I S</h2>", unsafe_allow_html=True)
-with col3:
-    st.empty()
 
-st.divider()
-
-# Main Chat Area
-if not st.session_state.messages:
-    # Welcome Screen
-    st.markdown("""
-    <div style='text-align:center; padding:80px 20px;'>
-        <h1 style='color:white; font-size:36px;'>What can I Do For You?</h1>
-        <p style='color:#888; font-size:18px; margin-top:20px;'>Your personal AI assistant is ready to help!</p>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    # Show Messages
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
-
-# Input Area
-user_input = st.chat_input("Ask JARVIS anything...")
-
-if user_input:
-    # Add user message
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    
-    with st.chat_message("user"):
-        st.write(user_input)
-    
-    # Get AI Response
-    with st.spinner("⚡ JARVIS is thinking..."):
-        if not API_KEY:
-            response = """**⚠️ API Key Missing!**
-
-Please add your OpenRouter API key:
-
-1. Go to [OpenRouter](https://openrouter.ai/keys) and get a free key
-2. In Streamlit Cloud → Settings → Secrets → Add:
-   ```
-   OPENROUTER_API_KEY=your_key_here
-   ```
-3. Restart the app"""
-        else:
-            try:
-                headers = {
-                    "Authorization": f"Bearer {API_KEY}",
-                    "Content-Type": "application/json"
-                }
-                
-                data = {
-                    "model": "meta-llama/llama-3.1-8b-instruct",
-                    "messages": [
-                        {"role": "system", "content": "You are JARVIS, Tony Stark's AI assistant. Use British wit, call user 'Sir', be helpful and slightly sarcastic."},
-                        {"role": "user", "content": user_input}
-                    ]
-                }
-                
-                res = requests.post(
-                    "https://openrouter.ai/api/v1/chat/completions",
-                    headers=headers,
-                    json=data,
-                    timeout=60
+component = components.declare_component(
+    "amber_core", path=str(Path(__file__).parent / "hologram" / "ui")
+)
+owner = str(setting("OWNER_EMAIL", "")).strip().casefold()
+auth = setting("auth", {}) if owner else {}
+has_login = bool(
+    auth
+    and auth.get("client_id")
+    and auth.get("server_metadata_url")
+    and auth.get("cookie_secret")
+    and auth.get("redirect_uri")
+)
+signed = False
+verified = False
+if owner and has_login:
+    try:
+        signed = bool(st.user.is_logged_in)
+        verified = (
+            signed
+            and st.user.get("email_verified") is True
+            and str(st.user.get("email", "")).casefold() == owner
+        )
+    except (AttributeError, KeyError, FileNotFoundError):
+        pass
+allowed = not owner or verified
+gate = dict(ownerRequired=bool(owner), authorized=allowed, hasLogin=has_login, signedIn=signed)
+req = component(
+    contract="amber.v1",
+    access=gate,
+    result=st.session_state.get("amber_result"),
+    key="amber-screen",
+    default=None,
+)
+if isinstance(req, dict):
+    rid = req.get("id")
+    kind = req.get("kind")
+    if (
+        isinstance(rid, str)
+        and re.fullmatch(r"[\w-]{1,80}", rid)
+        and rid != st.session_state.get("amber_last")
+    ):
+        st.session_state.amber_last = rid
+        if kind == "login" and owner and has_login and not signed:
+            st.login()
+        elif kind == "logout" and owner and has_login and signed:
+            st.logout()
+        elif kind == "command":
+            lang = req.get("lang", "hi-IN")
+            lang = "hi-IN" if isinstance(lang, str) and lang.startswith("hi") else "en-IN"
+            if not allowed:
+                r = reply(
+                    "Only the signed-in owner can use this assistant.",
+                    "केवल साइन इन किया हुआ मालिक इस असिस्टेंट को आदेश दे सकता है।",
+                    lang,
                 )
-                
-                if res.status_code == 200:
-                    response = res.json()["choices"][0]["message"]["content"]
-                elif res.status_code == 401:
-                    response = "❌ Invalid API Key! Please check your key in Streamlit Secrets."
+            elif (
+                not isinstance(req.get("query"), str)
+                or not 0 < len(req["query"].strip()) <= MAX_QUERY
+            ):
+                r = reply("Please use one short command.", "एक छोटा आदेश बोलिए।", lang)
+            else:
+                now = time.monotonic()
+                hits = [t for t in st.session_state.get("amber_hits", []) if t > now - 60]
+                if len(hits) >= 18 or not public_limit().allow("all"):
+                    r = reply(
+                        "Please wait a moment before the next command.",
+                        "अगला आदेश देने से पहले थोड़ा रुकिए।",
+                        lang,
+                    )
                 else:
-                    response = f"⚠️ Error: {res.status_code}"
-                    
-            except Exception as e:
-                response = f"❌ Error: {str(e)}"
-    
-    # Add assistant response
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    
-    with st.chat_message("assistant"):
-        st.write(response)
+                    st.session_state.amber_hits = hits + [now]
+                    history = req.get("history", [])
+                    history = history[-4:] if isinstance(history, list) else []
+                    # Never spend the owner's key on anonymous public traffic.
+                    key = setting("OPENROUTER_API_KEY", "") if verified else ""
+                    r = answer(
+                        req["query"],
+                        lang,
+                        req.get("zone", "UTC"),
+                        pending=req.get("pending", ""),
+                        history=history,
+                        key=key,
+                        search_key=setting("BRAVE_SEARCH_API_KEY", "") if verified else "",
+                        model=setting("OPENROUTER_MODEL", "openrouter/auto"),
+                    )
+            st.session_state.amber_result = dict(r, id=rid)
+            st.rerun()
