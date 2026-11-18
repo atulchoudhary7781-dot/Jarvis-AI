@@ -1,3 +1,4 @@
-# Only the Streamlit / hosted entrypoint needs these. The local launcher uses stdlib.
+# Streamlit deployment; local launcher still runs without these (system voice).
 streamlit>=1.51,<2
 Authlib>=1.3.2,<2
+-r requirements-voice.txt

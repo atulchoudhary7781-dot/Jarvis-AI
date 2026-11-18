@@ -289,7 +289,13 @@ def clock(zone, name, lang, date=False, now=None):
     if date:
         val = dt.strftime("%A, %d %B %Y")
         hi = f"{dt.day} {'जनवरी फरवरी मार्च अप्रैल मई जून जुलाई अगस्त सितंबर अक्टूबर नवंबर दिसंबर'.split()[dt.month - 1]} {dt.year}"
-        return reply(f"The date in {name} is {val}.", f"{hi_name} में आज {hi} है।", lang, zone=zone)
+        return reply(
+            f"The date in {name} is {val}.",
+            f"{hi_name} में आज {hi} है।",
+            lang,
+            zone=zone,
+            topic="date",
+        )
     hhmm = dt.strftime("%I:%M %p").lstrip("0")
     hi_hour = dt.hour % 12 or 12
     part = (
@@ -303,7 +309,11 @@ def clock(zone, name, lang, date=False, now=None):
     )
     hi_min = f" बजकर {dt.minute} मिनट" if dt.minute else " बजे"
     return reply(
-        f"It is {hhmm} in {name}.", f"{hi_name} में अभी {part} {hi_hour}{hi_min} हैं।", lang, zone=zone
+        f"It is {hhmm} in {name}.",
+        f"{hi_name} में अभी {part} {hi_hour}{hi_min} हैं।",
+        lang,
+        zone=zone,
+        topic="time",
     )
 
 
@@ -333,6 +343,7 @@ def conditions(loc, lang, now=None):
             lang,
             source="Open-Meteo",
             observed=obs["time"],
+            topic="weather",
         )
     return reply(
         f"Open-Meteo reports {val} degrees Celsius in {label}"
@@ -344,6 +355,7 @@ def conditions(loc, lang, now=None):
         lang,
         source="Open-Meteo",
         observed=obs["time"],
+        topic="weather",
     )
 
 
@@ -600,8 +612,8 @@ def answer(
             if not city:
                 if w or pending == "weather":
                     return reply(
-                        "Which city? Tap again and say its name.",
-                        "किस शहर का मौसम? फिर टैप करके शहर का नाम बोलिए।",
+                        "Which city? Just say its name.",
+                        "किस शहर का मौसम जानना चाहेंगे?",
                         lang,
                         follow="weather",
                     )
@@ -650,8 +662,8 @@ def answer(
             "what can you do",
         }:
             return reply(
-                "I am listening. Ask for the time in Tokyo, the weather in Delhi, or a Wikipedia topic. Tap once for each command.",
-                "मैं तैयार हूँ। टोक्यो का समय, दिल्ली का मौसम या विकिपीडिया पर कोई विषय पूछिए। हर आदेश के लिए एक बार टैप कीजिए।",
+                "I am listening. Ask for the time in Tokyo, the weather in Delhi, or a Wikipedia topic. You can ask another question when I finish.",
+                "मैं तैयार हूँ। टोक्यो का समय, दिल्ली का मौसम या विकिपीडिया पर कोई विषय पूछिए। मेरे जवाब के बाद अगला सवाल पूछिए।",
                 lang,
             )
         explicit = (

@@ -1,62 +1,52 @@
 # J.A.R.V.I.S. — Golden hologram
 
-Ek khaali, kaali screen. Beech mein ek zinda sunehra core. Sirf wahi.
+Kaali screen par sirf ek sunehra 3D hologram. **Ek baar on karo, phir baat karte raho.** Jawaab bolte waqt baahari paratein alag hokar khulti hain, beech ka iris nazar aata hai aur awaaz ke utaar-chadhaav ke saath roshni badalti hai. Baat khatam hone par gola dobara judta hai. Koi button, transcript, menu ya dashboard nahi.
 
-Yeh film ki still image ya GIF nahi hai. Patli metallic paratein, tute hue rings, particles aur beech ka khula lens 3D mein bane hain. Drag karne par inki depth dikhti hai. Sunte, jawab dhoondhte aur bolte waqt roshni badalti hai. Screen par koi naam, menu, button, chat ya transcript nahi aata.
+## Sabse pehle aise try karo
 
-## Pehle chala kar dekho
+1. **Windows, enhanced male voice:** ZIP extract karo aur **`Start Enhanced JARVIS.cmd`** double-click karo. 64-bit Python **3.12** recommended (3.10–3.13 supported). Pehli baar yeh permission lekar ek alag Python environment mein speech engine install karega. Pehle enhanced start par host lagbhag **94 MB** ke verified voice/model files download karta hai. Uske baad unhe baar-baar download nahi karna padta. Agli baar isi launcher ya `Start Hologram.bat` se khol sakte ho.
+2. **Core par ek baar tap karo** ya **Space** dabao aur browser ko mic ki permission do. Bolo: **“Jarvis, Tokyo mein kitne baje hain?”** Jab jawab khatam ho, seedha bolo: **“Aur London mein?”** Wake word ya doosra tap zaroori nahi. JARVIS apna jawab dete waqt mic nahi chalata.
+3. **“Jarvis, mic band karo”**, **Esc**, ya core par dobara tap conversation band karta hai. Tab chhodne par bhi mic band hota hai; wapas aane par bina aapki marzi ke shuru nahi hota. Yeh foreground conversation hai, background mein chhupa hua listener nahi.
 
-1. ZIP **extract** karo. Windows par **`Start Hologram.bat`** double-click karo. Python 3.9+ chahiye; local launcher ke liye `pip install` nahi karna hai. macOS / Linux par us folder mein `python3 launch_hologram.py` chalao.
-2. Launcher installed Edge/Chrome mein ek clean full-screen app window kholne ki koshish karta hai. Agar normal browser tab khule, **F** dabao. Terminal khula rehne do; band karne ke liye terminal mein **Ctrl+C**.
-3. **Core par ek baar tap/click karo** (ya **Space** dabao). Pehli baar browser mic ki permission maangega. Bolo: **“Jarvis, Tokyo mein abhi kitne baje hain?”** Jawab awaaz mein aayega, screen par nahi. Agle sawaal ke liye phir tap karo.
+**Mic ke bina awaaz aur animation check karne ke liye `V` dabao.** Hindi default hai; **E** English, **H** Hindi. Enhanced mode mein asli neural synthesis hoti hai: Hindi ke liye `hm_omega`, English ke liye `bm_george`. Yeh stock masculine voices hain, kisi actor ki recording ya clone nahi. Model warm ho raha ho, download fail ho, ya host busy ho to app matching device voice use karta hai; us fallback mein male voice ki availability aapke browser par depend karti hai.
 
-Hindi default hai. **E** se English, **H** se Hindi. Browser/OS mein us bhasha ki speech voice aur recognition support honi chahiye. Koi khaas actor ki awaaz use nahi hoti.
+**Preview mein mic block ho?** Live app ko apne **alag HTTPS tab** mein Chrome ya Edge se kholo (local launcher `localhost` bhi theek hai). Browser/OS mic permission aur output volume check karo. File viewer mein khula hua HTML live app nahi hai. Browser ka permission dialog aur mic indicator normal hain; JARVIS unhe hide nahi karta.
 
-### Kuch orders aazmao
+### macOS / Linux
 
-| Bolo | Kya hoga |
-|---|---|
-| “Tokyo mein kitne baje hain?” / “Time in Buenos Aires” | Us shehar ka current local time, daylight saving ke saath |
-| “Delhi ka mausam batao” / “Weather in Paris” | Open-Meteo se mausam. Purani reading mile to JARVIS use purani hi batayega |
-| “Duniya ki khabrein sunao” / “World headlines” | BBC Hindi / BBC World ki do dated headlines |
-| “Chandrayaan ke baare mein batao” / “Search Wikipedia for the Moon” | Wikipedia se chhota jawab, source ke naam ke saath |
-| “Ek minute ka timer lagao” / “Set a timer for five minutes” | Isi tab mein timer; “cancel timer” se rok sakte ho |
-| “Zoom in”, “rotate slower”, “pause rotation”, “reset view” | Seedha hologram badalta hai |
-
-Timer ke liye tab khula rakho; sleeping device ya browser background mein alarm delay kar sakta hai. Ek time par ek timer hai; naya timer purane ko replace karta hai. Geocoding mein milte-julte shehar hon to naam ke baad comma aur country do. General AI aur poore public web par search optional hain, neeche dekho.
-
-### Bina screen par controls laaye
-
-- **Drag / arrow keys:** hologram ko ghumao. **P:** auto-rotation pause/resume.
-- **F** ya core ko **long-press karke chhodo:** full screen. Browser ka **F11** bhi use kar sakte ho.
-- **Esc** ya active core par dobara tap: current listening, lookup ka intezaar, ya speech cancel. Pehle se provider tak pahunch chuki request wapas nahi li ja sakti.
-- **T → order type karo → Enter:** mic ke bina wahi command chalao. Koi textbox/typed text **dikhega nahi**. Esc se cancel. Isme password mat likhna.
-- **O:** sirf configured private Streamlit mode mein owner sign-in/sign-out. Browser ka login/permission dialog app ki screen se alag hai.
-
-Mic iframe mein block ho to preview ko apne tab mein kholo, ya local launcher use karo. `localhost`/HTTPS, browser mic permission aur system audio check karo. Agar voice output installed nahi hai, accessible status screen reader ko milta hai. Info service ko terminal se bhi check kar sakte ho:
+64-bit Python 3.12 aur supported wheels waale host par extracted folder mein:
 
 ```sh
-python launch_hologram.py --ask "time in Tokyo" --lang en
+python3.12 -m venv .venv
+.venv/bin/python -m pip install -r requirements-voice.txt
+.venv/bin/python launch_hologram.py
 ```
 
-**Sirf design dekhna hai?** `hologram/ui/index.html` seedha kholo. Koi CDN, server ya image download nahi chahiye. File-only mode mein 3D, gestures, timers aur kuch clocks hain; internet waale jawaabon ke liye launcher ya Streamlit app chalao.
+**Halka, bina install ka mode:** Windows par `Start Hologram.bat`, ya `python3 launch_hologram.py` (stock Python 3.9+). Neural runtime na ho to system voice milegi; baat karne ka loop aur opening animation wahi rahenge. Terminal ko khula rakho; **Ctrl+C** launcher band karta hai.
 
-## Apne `Jarvis-AI` repo mein lagana
+## Kya pooch sakte ho?
 
-Yeh ready-to-run **update** hai, poore purane repository ki copy nahi. Public `main` revision `ebe7d939cb25` ke file paths ke hisaab se banaya gaya hai. Apne uncommitted changes ka backup lo. Nayi branch par ZIP ke **andar ke files** repo root mein copy karo: naya `app.py` purane `app.py` ki jagah aana chahiye, uske bagal mein `hologram/` hona chahiye. Extra nested folder mat banana.
+| Pehla sawaal / order | Phir kya hoga |
+|---|---|
+| “Tokyo mein kitne baje hain?” → “Aur London mein?” | Dono shehron ke local clocks, DST ke saath. City time/date/weather ka chhota follow-up do minute tak samajhta hai. |
+| “Aaj ka mausam batao” → “Delhi” | Agar shehar nahi bataya to JARVIS khud poochta hai; agla jawaab seedha bolo. Open-Meteo reading purani ho to saaf batata hai. |
+| “Duniya ki khabrein sunao” / “World headlines” | BBC Hindi ya BBC World ki do dated headlines. |
+| “Chandrayaan ke baare mein batao” / “Search Wikipedia for the Moon” | Source ke naam ke saath chhota encyclopedia jawab. |
+| “Ek minute ka timer lagao” / “Cancel timer” | Is tab mein ek timer. Naya timer purane ko replace karta hai; device sleep ya background mein der ho sakti hai. |
+| “Zoom in”, “rotate slower”, “reset view” | Seedha 3D hologram badalta hai. |
 
-- `app.py` ab Streamlit ke purane sidebar/chat ki jagah isi hologram ko chalata hai. Hosted app ka entrypoint ab bhi **`app.py`** hai. Dependencies ke liye updated `requirements.txt` bhi copy karo.
-- `Jarvis_Project/run_jarvis.py` aur purana `.../Jarvis/Jarvis_Launcher.bat` ab hologram se khulte hain. Purana Tk interface delete nahi kiya gaya. Original checkout mein `python Jarvis_Project/run_jarvis.py --classic` se use chala sakte ho (uski apni dependencies chahiye).
-- Database, account/session, personal photo, bundled Python, API-key file aur background services is update mein nahi hain. Naya mode unhe import nahi karta. Koi GitHub push/deployment apne aap nahi hota.
+### Screen khaali rakhne waale shortcuts
 
-## Private AI, owner access aur poore public web ki search
+- **Tap / Space / Enter:** hands-free session on/off. Jawab ke beech mein bhi tap ya Esc turant rokta hai; mic dobara nahi khulta. Server ko pehle hi mil chuki request wapas nahi li ja sakti.
+- **V:** bina mic ke voice/iris preview. **E / H:** English / Hindi.
+- **Drag / arrows:** orbit. **P:** auto-rotation pause/resume. **F** ya core par **long-press karke chhodo:** full screen.
+- **T → order type karo → Enter:** mic ke bina wahi command; typed input screen par nahi dikhta. Password mat likhna. Touch devices par OS keyboard alag se dikh sakta hai.
+- **O:** configured private Streamlit deployment mein owner sign-in/sign-out. Browser aur hosting platform ke apne dialogs app ke bahar hain.
 
-Local mode sirf `127.0.0.1` par khulta hai. **Iska matlab speaker verification nahi hai:** unlocked device par mic activate karne wala koi bhi bol sakta hai. Hosted app ko sirf apne liye rakhne ke liye verified owner login configure karo. Is mode mein server har information request par owner ko check karta hai, sirf frontend par nahi.
+## Repo aur hosting
 
-- Bina keys: city clocks, current weather, public knowledge aur headlines.
-- Private `OPENROUTER_API_KEY`: natural conversation, isi tab ke pichhle do AI exchanges ke context ke saath.
-- Private `BRAVE_SEARCH_API_KEY`: “Search the web for lunar research” par public web ke do results aur unke source domains. JARVIS result pages par khud navigate ya code execute nahi karta.
+`app.py` ke saath `hologram/`, `requirements.txt` aur `requirements-voice.txt` **repo root** mein rakho. Existing Streamlit app ka target **`main` → `app.py`** hai. Optional private AI (`OPENROUTER_API_KEY`), explicit public-web search (`BRAVE_SEARCH_API_KEY`), verified owner login, privacy, model attribution aur tests: **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
-Setup aur hosting: **[DEPLOYMENT.md](DEPLOYMENT.md)**. Yeh global information assistant hai, duniya ke private accounts/devices ka remote controller nahi. Payments, shell commands ya unrestricted system access isme nahi hai.
+Standalone local mode sirf loopback par hai; yeh speaker verification nahi hai. Public preview keys nahi padhta. Private accounts, payments, OS shell ya device-control ka access nahi joda gaya hai. Original full checkout par `python Jarvis_Project/run_jarvis.py --classic` purana Tk mode kholta hai. Is runnable update mein legacy account DB, sessions, credentials, personal photos ya bundled Python nahi hain.
 
-**Security:** Agar chat mein GitHub token share hua hai to use revoke karo. Naya token chat, code ya ZIP mein mat rakho. Original public checkout mein `api_key.env`, session aur account DB jaise filenames tracked hain. Agar unmein real credentials/personal data hain to unhe rotate/invalidate aur repo history se remove karo. Sirf `.gitignore` add karne se purani history nahi hatti.
+**Security:** Agar GitHub token chat ya repository mein expose hua tha to use revoke karo. Naye secrets chat mein mat bhejo. Asli public checkout ki historic credential/session files ko sirf `.gitignore` se private nahi banaya ja sakta; real secrets rotate aur zaroorat par history clean karo.

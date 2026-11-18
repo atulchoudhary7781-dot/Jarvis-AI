@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#020305"><meta name="jarvis-host" content="portable"><meta name="color-scheme" content="dark"><title>J.A.R.V.I.S. · Amber core</title><link rel="icon" href="data:,"><style>
+<html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#020305"><meta name="jarvis-host" content="portable"><meta name="jarvis-voice" content="system"><meta name="color-scheme" content="dark"><title>J.A.R.V.I.S. · Amber core</title><link rel="icon" href="data:,"><style>
 :root{color-scheme:dark;background:#020305}*{box-sizing:border-box}html,body,main{width:100%;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}canvas{display:block;width:100%;height:100%;background:#020305;outline:none;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;cursor:grab}canvas:active{cursor:grabbing}canvas.rest{cursor:none}.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;clip:rect(0,0,0,0);clip-path:inset(50%);overflow:hidden;white-space:nowrap;border:0}
-</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space for a single voice command. Drag to orbit. F for full screen; Escape to cancel." aria-describedby="keys"></canvas><input id="command" class="sr" aria-label="Voice alternative: type one command and press Enter" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><p class="sr" id="keys" lang="en">T: type a command without a visible overlay. H: Hindi voice. E: English voice. P: pause or resume rotation. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><div class="sr" role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
-'use strict';
+</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><input id="command" class="sr" aria-label="Voice alternative: type one command and press Enter" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><p class="sr" id="keys" lang="en">Tap once and allow the mic. After each answer JARVIS listens for the next question. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. T: type a command without a visible overlay. H: Hindi voice. E: English voice. P: pause or resume rotation. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><div class="sr" role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
+"use strict";
 /* AMBER / Geometry atlas. All positions are generated in three dimensions.
    Four moving assemblies: outer skin, inner machinery, signal bus, and lens. */
 function makeAtlas(lean) {
@@ -642,21 +642,162 @@ function makeAtlas(lean) {
     1.24
   );
 
+  // The innermost mechanism: eight thin counter-curved vanes telescope into
+  // view from below the optical lens. These are real rails and concave foil.
+  group = 4;
+  for (let j = 0; j < 8; j++) {
+    const phase = (j * tau) / 8 + 0.12,
+      maxR = 0.213 + 0.022 * Math.sin(j * 2.13),
+      sgn = j % 3 === 0 ? 1 : -1;
+    const vane = (u, v) => {
+      const r = 0.087 + (maxR - 0.087) * u,
+        theta =
+          phase +
+          0.86 * (1 - u) ** 1.19 +
+          0.05 * Math.sin(u * 4 + j * 0.3) +
+          v * (0.035 + 0.16 * (1 - u) + 0.035 * Math.sin(Math.PI * u));
+      return [
+        r * Math.cos(theta) - 0.021,
+        r * Math.sin(theta) - 0.003,
+        -0.054 + 0.055 * Math.sin(Math.PI * u) + 0.008 * v,
+      ];
+    };
+    for (let k = 0; k < 5; k++) {
+      const v = -1 + k * 0.5;
+      path(
+        (u) => vane(u, v),
+        0.025,
+        0.99,
+        35,
+        k === 0 || k === 4 ? 0.59 : 0.21,
+        k === 0 ? 0.8 : 0.48,
+        0.5,
+        0.045
+      );
+    }
+    for (let k = 0; k < 24; k++) {
+      let a = (k + 0.4) / 25,
+        b = (k + 1) / 25,
+        c = ink(range(0.035, 0.11), 0.49);
+      if (k % 5 !== 1) {
+        tri(vane(a, -0.98), vane(b, -0.98), vane(b, 0.67), c);
+        tri(vane(a, -0.98), vane(b, 0.67), vane(a, 0.67), c);
+      }
+      if (k % 3 !== 0) line(vane(a, -0.96), vane(a + 0.012, -0.28), ink(range(0.41, 0.96), 0.72));
+      if (k % 6 === 1) dot(vane(a, sgn * 0.91), ink(1.2, 0.78), 2.8);
+    }
+  }
+
   for (let k of Object.keys(A)) A[k] = new Float32Array(A[k]);
   return A;
 }
+/* Kinematic atlas. A primitive belongs to a single leaf, so a line or foil
+   cannot stretch across an open seam. Pre-bake a rigid hinge arc into two
+   quadratic control poses. WebGL and Canvas2D interpolate the same positions.
+   The closed pose is unchanged; no 2D zoom or swapped movie is used. */
+function bakeOpening(atlas) {
+  const rig = new Map(),
+    tau = Math.PI * 2;
+  for (const [name, buf] of Object.entries(atlas)) {
+    const width = name === "foil" ? 3 : name === "line" ? 2 : 1;
+    const data = new Float32Array((buf.length / 9) * 7);
+    for (let i = 0; i < buf.length; i += 9 * width) {
+      let cx = 0,
+        cy = 0,
+        cz = 0;
+      for (let j = 0; j < width; j++) {
+        cx += buf[i + j * 9];
+        cy += buf[i + j * 9 + 1];
+        cz += buf[i + j * 9 + 2];
+      }
+      cx /= width;
+      cy /= width;
+      cz /= width;
+      const group = buf[i + 8] | 0,
+        front = cz > -0.12,
+        petals = group === 0 ? (front ? 8 : 7) : 7,
+        bias = group === 0 ? (front ? 0.09 : 0.45) : 0.29,
+        sector = Math.floor(((Math.atan2(cy, cx) - bias) / tau) * petals),
+        dir = bias + ((sector + 0.5) * tau) / petals,
+        dx = Math.cos(dir),
+        dy = Math.sin(dir),
+        order = 0.5 + 0.5 * Math.sin(dir * 2.4 + 0.9 * group),
+        lag = group === 0 ? 0.085 + order * 0.13 : group === 1 ? 0.08 + order * 0.09 : group === 4 ? 0.15 : 0;
+      function posed(x, y, z, t) {
+        let a = dx * x + dy * y,
+          b = -dy * x + dx * y,
+          z2 = z,
+          spin = 0;
+        if (group <= 1) {
+          const outer = group === 0,
+            hingeR = outer ? (front ? 0.64 : 0.66) : 0.39,
+            hingeZ = outer ? (front ? -0.37 : 0.14) : -0.12,
+            tilt = t * (outer ? (front ? 0.61 + 0.11 * order : -0.29 - 0.055 * order) : front ? 0.44 : -0.2),
+            dr = a - hingeR,
+            dz = z - hingeZ,
+            c = Math.cos(tilt),
+            s = Math.sin(tilt);
+          a = hingeR + dr * c + dz * s + t * (outer ? 0.074 : 0.055);
+          z2 = hingeZ - dr * s + dz * c + t * (outer ? -0.105 : 0.14);
+          b += t * (outer ? 0.038 : 0.022) * Math.sin(dir * 1.7);
+          spin = t * (outer ? (front ? 0.11 : -0.055) : -0.21);
+        } else if (group === 2) {
+          const radius = Math.min(1, Math.hypot(x, y, z));
+          a *= 1 + t * 0.27 * radius;
+          b *= 1 + t * 0.27 * radius;
+          z2 += t * (0.12 - 0.23 * radius);
+          spin = t * (0.08 - 0.19 * radius);
+        } else {
+          const scale = 1 + t * (group === 3 ? 0.92 : 0.77);
+          a *= scale;
+          b *= scale;
+          z2 += t * (group === 3 ? 0.34 : 0.235);
+          spin = t * (group === 3 ? 0.39 : -0.44);
+        }
+        const xx = dx * a - dy * b,
+          yy = dy * a + dx * b,
+          c = Math.cos(spin),
+          s = Math.sin(spin);
+        return [xx * c - yy * s, xx * s + yy * c, z2];
+      }
+      for (let j = 0; j < width; j++) {
+        const k = i + j * 9,
+          off = (k / 9) * 7,
+          x = buf[k],
+          y = buf[k + 1],
+          z = buf[k + 2],
+          mid = posed(x, y, z, 0.5),
+          end = posed(x, y, z, 1);
+        for (let d = 0; d < 3; d++) {
+          const rest = buf[k + d],
+            last = end[d] - rest;
+          data[off + d] = 2 * (mid[d] - rest) - 0.5 * last;
+          data[off + 3 + d] = last;
+        }
+        data[off + 6] = lag;
+      }
+    }
+    rig.set(buf, data);
+  }
+  return rig;
+}
+
 /* Render the same atlas using either WebGL (with two scales of optical bloom)
    or a reduced perspective-projected Canvas2D pass on machines without GL. */
 function makeStage(canvas) {
   const reduced = matchMedia("(prefers-reduced-motion: reduce)"),
     lean = Math.min(innerWidth, innerHeight) < 540 || (navigator.hardwareConcurrency || 8) < 4;
   const atlas = makeAtlas(lean),
+    rig = bakeOpening(atlas),
     clamp = (x, a, b) => Math.max(a, Math.min(b, x));
   let W = 1,
     H = 1,
     dpr = 1,
     rad = 1,
     mode = "idle",
+    opening = 0,
+    articulation = 0,
+    meter = null,
     energy = 0,
     kick = 0,
     clock = 0,
@@ -719,11 +860,13 @@ function makeStage(canvas) {
   }
   function initGL() {
     const vert = `precision highp float;
-      attribute vec3 pos, tint; attribute float size, seed, layer;
-      uniform mat3 turn[4]; uniform vec2 fit; uniform float tm, px, gain, beat;
+      attribute vec3 pos, tint, bend, travel; attribute float size, seed, layer, lag;
+      uniform mat3 turn[4]; uniform vec2 fit; uniform float tm, px, gain, beat, aperture, syllable;
       varying vec3 lit; varying float vSeed;
       void main(){vec3 p;
-        if(layer<.5)p=turn[0]*pos;else if(layer<1.5)p=turn[1]*pos;else if(layer<2.5)p=turn[2]*pos;else p=turn[3]*pos;
+        float u=smoothstep(lag,1.,aperture);
+        vec3 fitted=pos+bend*(2.*u*(1.-u))+travel*u*u;
+        if(layer<.5)p=turn[0]*fitted;else if(layer<1.5)p=turn[1]*fitted;else if(layer<2.5)p=turn[2]*fitted;else p=turn[3]*fitted;
         float depth=3.9/(3.9-p.z);gl_Position=vec4(p.xy*vec2(1.042,.986)*fit*depth,0.,1.);
         float fog=mix(.20,1.13,smoothstep(-.92,.78,p.z));
         float lamp=.90+.18*cos(p.x*5.2+p.y*3.1-p.z*2.)+.09*sin(3.*p.x-7.*p.y);
@@ -731,7 +874,8 @@ function makeStage(canvas) {
         float wave=pow(.5+.5*cos(length(pos)*14.-tm*3.),9.);
         float flow=pow(.5+.5*cos(dot(pos,vec3(9.7,-4.2,2.1))-tm*1.25+layer*1.2),20.);
         lit=tint*fog*lamp*flash*(1.+flow*.16+gain*(.22+.72*wave)+beat*.38);
-        if(layer>2.5)lit*=1.16;
+        if(layer>2.5)lit*=1.16+aperture*.56+syllable*.26;
+        if(layer>3.5)lit*=smoothstep(.085,.51,aperture);
         gl_PointSize=clamp(size*px*depth*(.95+.035*gain),1.,16.);
         vSeed=seed;
       }`;
@@ -778,8 +922,8 @@ function makeStage(canvas) {
     }
     let scene = places(
       program(vert, frag),
-      ["pos", "tint", "size", "seed", "layer"],
-      ["fit", "turn[0]", "gain", "beat", "tm", "px", "sparks"]
+      ["pos", "tint", "size", "seed", "layer", "bend", "travel", "lag"],
+      ["fit", "turn[0]", "gain", "beat", "tm", "px", "sparks", "aperture", "syllable"]
     );
     let down = places(program(quad, shrink), ["pos"], ["tex", "dx"]),
       soft = places(program(quad, blur), ["pos"], ["tex", "dx"]),
@@ -791,6 +935,7 @@ function makeStage(canvas) {
       return b;
     };
     const bufs = Object.fromEntries(names.map((n) => [n, makeBuffer(atlas[n])]));
+    const joints = Object.fromEntries(names.map((n) => [n, makeBuffer(rig.get(atlas[n]))]));
     const qbuf = makeBuffer(new Float32Array([-1, -1, 3, -1, -1, 3]));
     let targets = [];
     function target(w, h) {
@@ -854,8 +999,9 @@ function makeStage(canvas) {
     }
     drawGL = (mats) => {
       let [s, a, b, c, d] = targets;
-      let fx = (2 * rad * zoom) / W,
-        fy = (2 * rad * zoom) / H;
+      const fitRad = (rad * zoom) / (1 + 0.55 * opening);
+      let fx = (2 * fitRad) / W,
+        fy = (2 * fitRad) / H;
       gl.bindFramebuffer(gl.FRAMEBUFFER, s.f);
       gl.viewport(0, 0, s.w, s.h);
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -868,6 +1014,8 @@ function makeStage(canvas) {
       gl.uniform1f(scene.px, dpr * clamp(Math.sqrt(rad / 305), 0.69, 1.55) * zoom);
       gl.uniform1f(scene.gain, energy);
       gl.uniform1f(scene.beat, kick);
+      gl.uniform1f(scene.aperture, opening);
+      gl.uniform1f(scene.syllable, articulation);
       const attrs = [
         [scene.pos, 3, 0],
         [scene.tint, 3, 12],
@@ -881,6 +1029,15 @@ function makeStage(canvas) {
           gl.enableVertexAttribArray(loc);
           gl.vertexAttribPointer(loc, num, gl.FLOAT, false, 36, off);
         }
+        gl.bindBuffer(gl.ARRAY_BUFFER, joints[n]);
+        for (const [loc, num, off] of [
+          [scene.bend, 3, 0],
+          [scene.travel, 3, 12],
+          [scene.lag, 1, 24],
+        ]) {
+          gl.enableVertexAttribArray(loc);
+          gl.vertexAttribPointer(loc, num, gl.FLOAT, false, 28, off);
+        }
         gl.uniform1f(scene.sparks, n === "spark" ? 1 : 0);
         gl.drawArrays(
           n === "line" ? gl.LINES : n === "spark" ? gl.POINTS : gl.TRIANGLES,
@@ -889,6 +1046,7 @@ function makeStage(canvas) {
         );
       }
       for (let [loc] of attrs) gl.disableVertexAttribArray(loc);
+      for (let loc of [scene.bend, scene.travel, scene.lag]) gl.disableVertexAttribArray(loc);
       gl.disable(gl.BLEND);
       pass(down, s, a, 1 / a.w, 1 / a.h);
       pass(soft, a, b, 1.32 / a.w, 0);
@@ -926,7 +1084,7 @@ function makeStage(canvas) {
   function drawCPU(mats) {
     if (!ctx) return;
     const c = ctx,
-      r = rad * zoom;
+      r = (rad * zoom) / (1 + 0.55 * opening);
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.globalCompositeOperation = "source-over";
     c.fillStyle = "#020305";
@@ -940,11 +1098,23 @@ function makeStage(canvas) {
     c.fillRect(0, 0, W, H);
     c.globalCompositeOperation = "lighter";
     function project(buf, i) {
-      let m = mats[buf[i + 8] | 0],
+      let m = mats[Math.min(3, buf[i + 8] | 0)],
         x = buf[i],
         y = buf[i + 1],
-        z = buf[i + 2],
-        zz = m[2] * x + m[5] * y + m[8] * z,
+        z = buf[i + 2];
+      if (opening > 0.0005) {
+        const pose = rig.get(buf),
+          k = (i / 9) * 7,
+          lag = pose[k + 6],
+          v = clamp((opening - lag) / (1 - lag), 0, 1),
+          t = v * v * (3 - 2 * v),
+          a = 2 * t * (1 - t),
+          b = t * t;
+        x += a * pose[k] + b * pose[k + 3];
+        y += a * pose[k + 1] + b * pose[k + 4];
+        z += a * pose[k + 2] + b * pose[k + 5];
+      }
+      const zz = m[2] * x + m[5] * y + m[8] * z,
         k = (r * 3.9) / (3.9 - zz);
       return [
         W * 0.5 + (m[0] * x + m[3] * y + m[6] * z) * k * 1.042,
@@ -955,6 +1125,7 @@ function makeStage(canvas) {
     let faces = Array.from({ length: 10 }, () => new Path2D()),
       f = atlas.foil;
     for (let i = 0; i < f.length; i += lean ? 54 : 27) {
+      if (f[i + 8] > 3.5 && opening < 0.1) continue;
       let a = project(f, i),
         b = project(f, i + 9),
         d = project(f, i + 18),
@@ -975,6 +1146,7 @@ function makeStage(canvas) {
       p = atlas.line,
       step = lean ? 36 : 18;
     for (let i = 0; i < p.length; i += step) {
+      if (p[i + 8] > 3.5 && opening < 0.1) continue;
       let a = project(p, i),
         b = project(p, i + 9),
         v = clamp(p[i + 3] * (0.82 + a[2] * 0.53) * (1.21 + energy * 0.36), 0, 1.39),
@@ -993,6 +1165,7 @@ function makeStage(canvas) {
     let dots = Array.from({ length: 8 }, () => new Path2D());
     p = atlas.spark;
     for (let i = 0; i < p.length; i += lean ? 18 : 9) {
+      if (p[i + 8] > 3.5 && opening < 0.1) continue;
       let a = project(p, i),
         rr = clamp(p[i + 6] * 0.355 * Math.sqrt(r / 300), 0.4, 2.28),
         v = clamp(p[i + 3] * (0.8 + a[2] * 0.5) * (1.12 + energy * 0.3), 0, 1.49),
@@ -1099,6 +1272,7 @@ function makeStage(canvas) {
         active ||
         mode !== "idle" ||
         kick > 0.011 ||
+        opening > 0.002 ||
         dirty ||
         Math.abs(yawGoal - yaw) + Math.abs(pitchGoal - pitch) + Math.abs(zoomGoal - zoom) > 0.0005;
     const interval = gl ? (lean ? 1000 / 34 : 1000 / 48) : 1000 / 22;
@@ -1109,6 +1283,18 @@ function makeStage(canvas) {
       const target = { idle: 0, listening: 0.72, thinking: 1.04, speaking: 0.91, error: 0.17 }[mode] || 0;
       let damp = 1 - Math.exp(-dt * 7);
       energy += (target - energy) * damp;
+      // Real playback energy drives the lens; native system voices only expose
+      // word-boundary events, so their fallback is a restrained mechanical breath.
+      const talking = mode === "speaking";
+      const level = talking
+        ? meter
+          ? clamp(meter() || 0, 0, 1)
+          : clamp(0.28 + kick * 0.81 + 0.09 * Math.sin(clock * 5.4), 0, 1)
+        : 0;
+      articulation += (level - articulation) * (1 - Math.exp(-dt * (level > articulation ? 19 : 9)));
+      const goal = talking ? (reduced.matches ? 0.24 : 0.83 + 0.17 * articulation) : 0;
+      opening += (goal - opening) * (1 - Math.exp(-dt * (talking ? 5.2 : 3.9)));
+      if (!talking && opening < 0.001) opening = 0;
       kick *= Math.exp(-dt * 3.3);
       pitch += (pitchGoal - pitch) * damp;
       yaw += (yawGoal - yaw) * damp;
@@ -1138,6 +1324,10 @@ function makeStage(canvas) {
   return {
     state(s) {
       mode = s;
+      force();
+    },
+    meter(fn) {
+      meter = typeof fn === "function" ? fn : null;
       force();
     },
     pulse(v = 0.55) {
@@ -1175,56 +1365,117 @@ function makeStage(canvas) {
     },
   };
 }
-/* Gestures + one-utterance audio. No startup microphone, no background listener.
-   The only typing surface is explicitly opened by the T shortcut. It is never
-   displayed; it exists for users without speech recognition or a microphone. */
+/* Conversation controller: OFF → LISTEN → LOOK UP → PLAY → LISTEN. The first
+   gesture is the only automatic-rearm consent. It is never stored or carried
+   into another tab/load. A recognizer is never reused for another turn. */
 (() => {
   const stage = makeStage(document.getElementById("core")),
     core = document.getElementById("core"),
-    live = document.getElementById("status"),
-    field = document.getElementById("command");
-  const $ = (s) => document.querySelector(s),
-    portable = $('meta[name="jarvis-host"]').content !== "http";
-  let transport = portable ? "portable" : "http",
+    field = document.getElementById("command"),
+    status = document.getElementById("status"),
+    root = document.documentElement;
+  const isFrame = parent !== window && /\/component\//.test(location.pathname);
+  let transport = isFrame
+      ? "boot"
+      : document.querySelector('meta[name="jarvis-host"]').content === "http"
+        ? "http"
+        : "portable",
+    neural = !isFrame && document.querySelector('meta[name="jarvis-voice"]').content === "neural";
+  let gate = { ownerRequired: false, authorized: true, hasLogin: false, signedIn: false },
     origin = "",
-    gate = { ownerRequired: false, authorized: true, hasLogin: false, signedIn: false };
-  let locale = "hi-IN";
+    locale = "hi-IN";
   try {
-    locale = sessionStorage.getItem("amber:language") === "en-IN" ? "en-IN" : "hi-IN";
+    if (sessionStorage.getItem("amber:language") === "en-IN") locale = "en-IN";
   } catch (_) {}
   const words = (en, hi) => (locale.startsWith("hi") ? hi : en),
     announce = (t) => {
-      live.textContent = t;
-    };
-  let phase = "idle",
-    ticket = 0,
+      status.textContent = t;
+    },
+    id = () =>
+      globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2);
+  let ticket = 0,
+    armed = false,
+    phase = "idle",
     rec = null,
-    request = null,
-    tts = null,
-    timer = null,
+    quietMic = Promise.resolve(),
+    rearm = 0,
     recordLimit = 0,
-    speechLimit = 0,
+    silence = 0,
+    rapidEnds = 0,
+    netErrors = 0,
     typed = false,
     follow = "",
     past = [],
-    bridge = null,
-    waitId = 0;
-  const id = () =>
-    globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2);
+    timer = null;
+  let lastTopic = "",
+    topicAt = 0;
+  let voiceSeq = 0,
+    player = null,
+    ctx = null,
+    fallbackUntil = 0;
+  const pending = new Map(),
+    synth = window.speechSynthesis;
+  // Prime only the inventory; this neither plays sound nor opens the microphone.
+  try {
+    synth?.getVoices();
+  } catch (_) {}
   function state(s) {
     phase = s;
+    root.dataset.state = s;
     stage.state(s);
-    document.documentElement.dataset.state = s;
   }
-  const synth = window.speechSynthesis;
-  function endRecording() {
-    if (!rec) return;
+  function setArmed(v) {
+    armed = !!v;
+    core.setAttribute("aria-pressed", String(armed));
+    root.dataset.conversation = armed ? "on" : "off";
+  }
+  function unlock() {
+    try {
+      const A = window.AudioContext || window.webkitAudioContext;
+      if (!A) return;
+      if (!ctx || ctx.state === "closed") ctx = new A({ latencyHint: "interactive" });
+      if (ctx.state !== "running") ctx.resume().catch(() => {});
+      const src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, 22050);
+      src.connect(ctx.destination);
+      src.onended = () => src.disconnect();
+      src.start();
+    } catch (_) {}
+  }
+  function releaseInput() {
+    clearTimeout(recordLimit);
+    if (!rec) return quietMic;
     const r = rec;
     rec = null;
-    r.onend = r.onerror = r.onresult = null;
+    r.onresult = r.onspeechstart = r.onnomatch = r.onerror = null;
+    quietMic = new Promise((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(t);
+        r.onend = null;
+        resolve();
+      };
+      const t = setTimeout(done, 550);
+      r.onend = done;
+      try {
+        r.abort();
+      } catch (_) {
+        done();
+      }
+    });
+    return quietMic;
+  }
+  function stopAudio() {
+    voiceSeq++;
+    const p = player;
+    player = null;
+    if (p) p.stop();
     try {
-      r.abort();
+      synth?.cancel();
     } catch (_) {}
+    stage.meter(null);
   }
   function finishField() {
     typed = false;
@@ -1232,132 +1483,117 @@ function makeStage(canvas) {
     field.disabled = true;
     if (document.activeElement === field) field.blur();
   }
-  function cancel() {
+  function invalidate() {
     ticket++;
-    clearTimeout(recordLimit);
-    clearTimeout(speechLimit);
-    clearTimeout(waitId);
-    endRecording();
-    if (request) {
-      request.abort();
-      request = null;
-    }
-    if (bridge) {
-      bridge.reject(Error("cancel"));
-      bridge = null;
-    }
-    tts = null;
-    try {
-      synth?.cancel();
-    } catch (_) {}
+    clearTimeout(rearm);
+    releaseInput();
+    stopAudio();
+    for (const r of Array.from(pending.values())) r.cancel();
     finishField();
-    follow = "";
     state("idle");
   }
-  function speak(text, lang = locale, token = ticket) {
-    if (token !== ticket || !text) return;
-    announce(text);
-    if (!synth || !window.SpeechSynthesisUtterance) {
-      state("idle");
-      stage.pulse(0.65);
-      return;
-    }
-    clearTimeout(speechLimit);
-    synth.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    tts = u;
-    u.lang = lang;
-    let vs = synth.getVoices();
-    let similar = vs.filter((v) => v.lang.toLowerCase().split(/[-_]/)[0] === lang.split("-")[0]);
-    u.voice =
-      similar.find((v) => v.localService && v.lang.toLowerCase() === lang.toLowerCase()) ||
-      similar.find((v) => v.localService) ||
-      similar.find((v) => v.lang.toLowerCase() === lang.toLowerCase()) ||
-      similar[0] ||
-      null;
-    u.rate = 1.015;
-    u.pitch = 0.94;
-    u.volume = 0.92;
-    state("speaking");
-    stage.pulse(0.45);
-    const done = () => {
-      if (token !== ticket || tts !== u) return;
-      clearTimeout(speechLimit);
-      tts = null;
-      state("idle");
-    };
-    u.onend = u.onerror = done;
-    u.onboundary = () => {
-      if (token === ticket) stage.pulse(0.28);
-    };
-    speechLimit = setTimeout(
-      () => {
-        if (tts === u && token === ticket) {
-          synth.cancel();
-          done();
-        }
-      },
-      Math.min(85000, Math.max(7000, text.length * 125 + 4000))
-    );
-    try {
-      synth.speak(u);
-    } catch (_) {
-      done();
-    }
+  function cancel() {
+    setArmed(false);
+    invalidate();
+    follow = "";
+    past = [];
+    lastTopic = "";
+    topicAt = 0;
+    silence = rapidEnds = netErrors = 0;
   }
-  function useLanguage(l, notify = true) {
-    locale = l;
-    try {
-      sessionStorage.setItem("amber:language", l);
-    } catch (_) {}
-    document.documentElement.lang = l;
-    if (notify) speak(words("English voice is ready.", "हिंदी आवाज़ तैयार है।"));
+  function send(type, props = {}, target = origin || "*") {
+    parent.postMessage({ isStreamlitMessage: true, type: "streamlit:" + type, ...props }, target);
   }
-  useLanguage(locale, false);
-  const send = (type, props = {}, target = origin || "*") =>
-    window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:" + type, ...props }, target);
-  const inComponent = window.parent !== window && /\/component\//.test(location.pathname);
-  if (inComponent) {
+  if (isFrame) {
     window.addEventListener("message", (e) => {
       if (
-        e.source !== window.parent ||
+        e.source !== parent ||
         e.data?.type !== "streamlit:render" ||
         e.data?.args?.contract !== "amber.v1" ||
-        (origin && e.origin !== origin)
+        (origin && origin !== e.origin)
       )
         return;
       origin = e.origin;
       transport = "component";
-      const args = e.data.args;
-      gate = args.access || gate;
-      const r = args.result;
-      if (bridge && r?.id === bridge.id) {
-        let b = bridge;
-        bridge = null;
-        clearTimeout(waitId);
-        b.resolve(r);
-      }
+      const a = e.data.args;
+      gate = a.access || gate;
+      neural = !!a.neural;
+      if (gate.ownerRequired && !gate.authorized && (armed || typed || player || pending.size)) cancel();
+      const r = a.result;
+      if (r && typeof r.id === "string") pending.get(r.id)?.finish(r);
     });
     send("componentReady", { apiVersion: 1 });
     send("setFrameHeight", { height: Math.max(450, innerHeight) });
   }
+  function rpc(kind, payload, tok, ms) {
+    if (tok !== ticket) return Promise.reject(Error("cancelled"));
+    const rid = id(),
+      msg = { ...payload, kind, id: rid };
+    return new Promise((resolve, reject) => {
+      const ctrl = new AbortController();
+      let ended = false;
+      const settle = (ok, val) => {
+        if (ended) return;
+        ended = true;
+        clearTimeout(timeout);
+        pending.delete(rid);
+        if (ok) resolve(val);
+        else reject(Error(val));
+      };
+      const cancel = () => {
+        ctrl.abort();
+        settle(false, "cancelled");
+      };
+      const timeout = setTimeout(() => {
+        ctrl.abort();
+        settle(false, "timeout");
+      }, ms);
+      pending.set(rid, { finish: (v) => settle(true, v), cancel });
+      if (transport === "component") {
+        send("setComponentValue", { dataType: "json", value: msg });
+        return;
+      }
+      if (transport !== "http") {
+        settle(false, "offline");
+        return;
+      }
+      fetch(new URL(kind === "voice" ? "api/voice" : "api/command", location.href), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        signal: ctrl.signal,
+        body: JSON.stringify(msg),
+      })
+        .then(async (r) => {
+          if (!r.ok && r.status !== 429) throw Error("lookup");
+          return r.json();
+        })
+        .then(
+          (v) => settle(true, v),
+          () => settle(false, "unavailable")
+        );
+    });
+  }
+  function allowed() {
+    if (transport === "boot") {
+      announce(words("Connecting. Try again in a moment.", "कनेक्शन तैयार हो रहा है।"));
+      return false;
+    }
+    if (transport === "component" && gate.ownerRequired && !gate.authorized) {
+      if (gate.signedIn)
+        speak(words("Sign in with the owner account. Press O to switch account.", "मालिक के खाते से साइन इन करें।"));
+      else owner();
+      return false;
+    }
+    return true;
+  }
   function owner() {
     if (transport !== "component" || !gate.ownerRequired) {
-      speak(
-        words(
-          "This session uses public skills. Owner sign-in is available on a configured private deployment.",
-          "यहाँ सार्वजनिक जानकारी उपलब्ध है। निजी डिप्लॉयमेंट में मालिक का साइन इन जोड़ सकते हैं।"
-        )
-      );
+      speak(words("This session uses public skills.", "यहाँ सार्वजनिक जानकारी उपलब्ध है।"));
       return;
     }
     if (!gate.hasLogin) {
-      speak(
-        words(
-          "Owner access is locked. Configure sign-in on the server.",
-          "मालिक का एक्सेस बंद है। सर्वर पर साइन इन सेट कीजिए।"
-        )
-      );
+      speak(words("Owner sign-in must be configured on the server.", "सर्वर पर मालिक का साइन इन सेट करना होगा।"));
       return;
     }
     send("setComponentValue", {
@@ -1365,24 +1601,8 @@ function makeStage(canvas) {
       value: { id: id(), kind: gate.signedIn ? "logout" : "login" },
     });
   }
-  function permitted() {
-    if (transport === "component" && gate.ownerRequired && !gate.authorized) {
-      if (gate.signedIn)
-        speak(
-          words(
-            "This is not the owner account. Press O to sign out.",
-            "यह मालिक का खाता नहीं है। साइन आउट के लिए ओ दबाइए।"
-          )
-        );
-      else owner();
-      return false;
-    }
-    return true;
-  }
-  function api(q, tok) {
+  async function api(q, tok) {
     const command = {
-      kind: "command",
-      id: id(),
       query: q,
       lang: locale,
       zone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -1390,41 +1610,7 @@ function makeStage(canvas) {
       history: past.slice(-4),
     };
     follow = "";
-    if (transport === "component")
-      return new Promise((resolve, reject) => {
-        bridge = { id: command.id, resolve, reject };
-        send("setComponentValue", { dataType: "json", value: command });
-        waitId = setTimeout(() => {
-          if (bridge?.id === command.id) {
-            bridge = null;
-            reject(Error("timeout"));
-          }
-        }, 30000);
-      });
-    if (transport === "http") {
-      request = new AbortController();
-      const signal = request.signal;
-      waitId = setTimeout(() => {
-        if (tok === ticket) request?.abort();
-      }, 28000);
-      return fetch(new URL("api/command", location.href), {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(command),
-        signal,
-      })
-        .then(async (r) => {
-          if (!r.ok && r.status !== 429) throw Error("lookup");
-          return r.json();
-        })
-        .finally(() => {
-          if (tok === ticket) {
-            clearTimeout(waitId);
-            request = null;
-          }
-        });
-    }
+    if (transport === "http" || transport === "component") return rpc("command", command, tok, 30000);
     // A downloaded single-file preview has no network backend. Never invent a
     // weather report, or silently send a question to another site.
     const zlist = [
@@ -1448,6 +1634,7 @@ function makeStage(canvas) {
         return Promise.resolve({
           lang: locale,
           source: "local",
+          topic: "time",
           text:
             new Intl.DateTimeFormat(locale, { timeZone: zone, hour: "numeric", minute: "2-digit" }).format(
               new Date()
@@ -1466,8 +1653,481 @@ function makeStage(canvas) {
       ),
     });
   }
+  /* Stock voices, not an actor imitation. Prefer a matching masculine natural
+     voice on the device when the actual on-host neural engine is unavailable. */
+  function nativeVoice(lang) {
+    const base = lang.slice(0, 2).toLowerCase();
+    let voices = [];
+    try {
+      voices = synth?.getVoices() || [];
+    } catch (_) {}
+    const score = (v) => {
+      let n = (v.name + " " + (v.voiceURI || "")).toLowerCase();
+      let male =
+        /\b(male|madhur|hemant|prabhat|prabhatneural|ravi|rishi|kunal|arjun|amit|daniel|david|ryan|george|guy|andrew|aaron|james|oliver|mark|alex)\b/.test(
+          n
+        ) || /madhurneural|prabhatneural|ryanneural|guyneural/.test(n);
+      let female = /\b(female|swara|kalpana|heera|lekha|zira|samantha|neerja|serena|sonia|aria)\b/.test(n);
+      return (
+        (male ? 100 : 0) -
+        (female ? 36 : 0) +
+        (/neural|natural|premium|enhanced/.test(n) ? 20 : 0) +
+        (v.lang.replace("_", "-").toLowerCase() === lang.toLowerCase() ? 6 : 0) +
+        (v.localService ? 3 : 0)
+      );
+    };
+    return (
+      voices
+        .filter((v) => String(v.lang).toLowerCase().split(/[-_]/)[0] === base)
+        .sort((a, b) => score(b) - score(a))[0] || null
+    );
+  }
+  function phrases(text) {
+    let rest = String(text).replace(/\s+/g, " ").trim().slice(0, 1150),
+      out = [];
+    while (rest) {
+      let limit = out.length ? 112 : 88;
+      if (rest.length <= limit) {
+        out.push(rest);
+        break;
+      }
+      let head = rest.slice(0, limit + 1),
+        cut = 0;
+      for (const re of [/[।.!?](?=\s)/g, /[,;:—](?=\s)/g, /\s/g]) {
+        let ends = [...head.matchAll(re)]
+          .map((m) => m.index + (re.source === "\\s" ? 0 : 1))
+          .filter((n) => n >= 18 && n <= limit);
+        if (ends.length) {
+          cut = ends[ends.length - 1];
+          break;
+        }
+      }
+      if (!cut) cut = limit;
+      out.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
+    }
+    return out.filter(Boolean);
+  }
+  const b64bytes = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  function playNative(text, lang, valid) {
+    return new Promise((resolve) => {
+      if (!synth || !window.SpeechSynthesisUtterance || !valid()) {
+        resolve(false);
+        return;
+      }
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = lang;
+      u.voice = nativeVoice(lang);
+      u.rate = 0.99;
+      u.pitch = 0.98;
+      u.volume = 0.96;
+      let settled = false,
+        watch = 0;
+      const end = (ok) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watch);
+        u.onstart = u.onend = u.onerror = u.onboundary = null;
+        if (player === handle) {
+          player = null;
+          if (valid()) state("thinking");
+        }
+        resolve(ok);
+      };
+      const handle = {
+        stop() {
+          end(false);
+          try {
+            synth.cancel();
+          } catch (_) {}
+        },
+      };
+      player = handle;
+      const start = () => {
+        if (!valid() || settled) return;
+        root.dataset.speaker = "system";
+        stage.meter(null);
+        state("speaking");
+        stage.pulse(0.4);
+      };
+      u.onstart = start;
+      u.onboundary = () => {
+        if (valid() && !settled) {
+          if (phase !== "speaking") start();
+          stage.pulse(0.48);
+        }
+      };
+      u.onend = () => end(valid());
+      u.onerror = () => end(false);
+      watch = setTimeout(
+        () => {
+          handle.stop();
+        },
+        Math.min(30000, Math.max(7000, text.length * 145 + 4500))
+      );
+      try {
+        synth.speak(u);
+      } catch (_) {
+        end(false);
+      }
+    });
+  }
+  async function playClip(clip, valid) {
+    if (!valid() || !clip?.ok || typeof clip.audio !== "string" || clip.audio.length > 1750000) return false;
+    const levels = b64bytes(clip.levels || ""),
+      at = (t) => (levels[Math.max(0, Math.floor(t * 25))] || 0) / 255;
+    if (ctx && ctx.state === "running") {
+      let buf;
+      try {
+        buf = await ctx.decodeAudioData(b64bytes(clip.audio).buffer);
+      } catch (_) {
+        return false;
+      }
+      if (!valid()) return false;
+      return new Promise((resolve) => {
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        let settled = false,
+          watch = 0,
+          started = ctx.currentTime;
+        const end = (ok) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(watch);
+          src.onended = null;
+          if (!ok) {
+            try {
+              src.stop();
+            } catch (_) {}
+          }
+          try {
+            src.disconnect();
+          } catch (_) {}
+          if (player === handle) {
+            player = null;
+            stage.meter(null);
+            if (valid()) state("thinking");
+          }
+          resolve(ok);
+        };
+        const handle = { stop: () => end(false) };
+        player = handle;
+        src.onended = () => end(valid());
+        try {
+          src.start();
+          started = ctx.currentTime;
+          root.dataset.speaker = clip.speaker;
+          stage.meter(() => at(ctx.currentTime - started));
+          state("speaking");
+        } catch (_) {
+          end(false);
+          return;
+        }
+        watch = setTimeout(() => end(false), (buf.duration + 3) * 1000);
+      });
+    }
+    // Media-element fallback: still meter the playback clock, never the input mic.
+    return new Promise((resolve) => {
+      let a,
+        settled = false,
+        watch = 0;
+      try {
+        a = new Audio("data:audio/wav;base64," + clip.audio);
+      } catch (_) {
+        resolve(false);
+        return;
+      }
+      const end = (ok) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(watch);
+        a.onplaying = a.onended = a.onerror = null;
+        a.pause();
+        a.removeAttribute("src");
+        if (player === handle) {
+          player = null;
+          stage.meter(null);
+          if (valid()) state("thinking");
+        }
+        resolve(ok);
+      };
+      const handle = { stop: () => end(false) };
+      player = handle;
+      a.onplaying = () => {
+        if (!valid()) {
+          end(false);
+          return;
+        }
+        root.dataset.speaker = clip.speaker;
+        stage.meter(() => at(a.currentTime));
+        state("speaking");
+      };
+      a.onended = () => end(valid());
+      a.onerror = () => end(false);
+      watch = setTimeout(() => end(false), 30000);
+      try {
+        a.play().catch(() => end(false));
+      } catch (_) {
+        end(false);
+      }
+    });
+  }
+  async function speak(text, lang = locale, tok = ticket) {
+    if (tok !== ticket || !text || document.hidden) return;
+    clearTimeout(rearm);
+    stopAudio();
+    const seq = voiceSeq,
+      valid = () => ticket === tok && seq === voiceSeq && !document.hidden;
+    announce(text);
+    state("thinking");
+    await releaseInput();
+    if (!valid()) return;
+    const parts = phrases(text);
+    let i = 0;
+    const canNeural = () =>
+      neural &&
+      (transport === "http" || (transport === "component" && (!gate.ownerRequired || gate.authorized)));
+    const load = (k) =>
+      rpc("voice", { text: parts[k], lang: lang.startsWith("hi") ? "hi-IN" : "en-IN" }, tok, 16000).catch(
+        () => null
+      );
+    try {
+      if (canNeural() && performance.now() >= fallbackUntil && parts.length) {
+        let future = load(0);
+        for (; i < parts.length; i++) {
+          let clip = await future;
+          if (!valid()) return;
+          if (i === 0 && clip?.reason === "warming") {
+            // Give a cold host one bounded retry before switching to the device voice.
+            clip = await load(i);
+            if (!valid()) return;
+          }
+          if (!clip?.ok) {
+            fallbackUntil = performance.now() + (clip?.reason === "warming" ? 2500 : 7000);
+            break;
+          }
+          // At most one clause ahead. Cancellations invalidate both the playhead
+          // and any in-flight inference reply; stale audio is never spoken.
+          future = i + 1 < parts.length ? load(i + 1) : null;
+          if (!(await playClip(clip, valid))) {
+            if (!valid()) return;
+            fallbackUntil = performance.now() + 7000;
+            break;
+          }
+          if (!valid()) return;
+        }
+      }
+      for (; i < parts.length && valid(); i++)
+        if (!(await playNative(parts[i], lang, valid))) {
+          if (valid()) {
+            setArmed(false);
+            state("idle");
+            announce(
+              text +
+                " " +
+                words("Audio output unavailable. The microphone is off.", "आवाज़ उपलब्ध नहीं है। माइक बंद है।")
+            );
+          }
+          return;
+        }
+    } catch (_) {
+      if (valid()) {
+        setArmed(false);
+        state("idle");
+        announce(text);
+      }
+      return;
+    }
+    if (!valid()) return;
+    stage.meter(null);
+    if (armed) scheduleListen(460);
+    else state("idle");
+  }
+  function useLanguage(l, notify = true) {
+    locale = l;
+    root.lang = l;
+    try {
+      sessionStorage.setItem("amber:language", l);
+    } catch (_) {}
+    if (notify) speak(words("English is ready.", "हिंदी में बोलिए।"));
+  }
+  useLanguage(locale, false);
+  function toggle() {
+    if (armed || phase !== "idle") {
+      cancel();
+      announce(words("Microphone off.", "माइक बंद है।"));
+      return;
+    }
+    unlock();
+    if (!allowed()) return;
+    if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
+      speak(
+        words(
+          "Voice input is not available here. Try Chrome or Edge in a separate tab, or press T to type.",
+          "यहाँ आवाज़ पहचान उपलब्ध नहीं है। अलग टैब में क्रोम या एज खोलें, या टी दबाकर टाइप करें।"
+        )
+      );
+      return;
+    }
+    silence = rapidEnds = netErrors = 0;
+    setArmed(true);
+    listen(++ticket);
+  }
+  function scheduleListen(delay) {
+    clearTimeout(rearm);
+    if (!armed || document.hidden || typed) {
+      state("idle");
+      return;
+    }
+    state("standby");
+    const tok = ticket;
+    let checks = 0;
+    const again = async () => {
+      await quietMic;
+      if (!armed || tok !== ticket || document.hidden || typed || player || rec) return;
+      if (synth?.speaking || synth?.pending) {
+        if (++checks < 9) {
+          rearm = setTimeout(again, 160);
+          return;
+        }
+        cancel();
+        announce(words("Audio is still playing. Microphone off.", "आवाज़ चल रही है। माइक बंद है।"));
+        return;
+      }
+      listen(++ticket);
+    };
+    rearm = setTimeout(again, delay);
+  }
+  function listen(tok) {
+    if (!armed || tok !== ticket || typed || document.hidden || rec || player) return;
+    const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!R) {
+      cancel();
+      return;
+    }
+    let r;
+    const began = performance.now();
+    const current = () => armed && tok === ticket && rec === r && !document.hidden;
+    const quiet = () => {
+      if (!current()) return;
+      releaseInput();
+      silence++;
+      scheduleListen(Math.min(1900, 340 + silence * 160));
+    };
+    const fail = (code) => {
+      if (!current()) return;
+      if (code === "no-speech") {
+        quiet();
+        return;
+      }
+      if (code === "network" && netErrors++ === 0) {
+        releaseInput();
+        scheduleListen(1300);
+        return;
+      }
+      cancel();
+      let msg =
+        code === "not-allowed" || code === "service-not-allowed"
+          ? words(
+              "Microphone access was blocked. Allow it in the browser or open this page in its own tab. You can press T to type.",
+              "माइक की अनुमति नहीं मिली। ब्राउज़र में अनुमति दें या अलग टैब में खोलें। टी दबाकर टाइप भी कर सकते हैं।"
+            )
+          : code === "audio-capture"
+            ? words("No microphone is available. Hands-free mode is off.", "माइक नहीं मिला। हैंड्स फ्री मोड बंद है।")
+            : code === "network"
+              ? words(
+                  "The speech recognition service is unreachable. Hands-free mode is off.",
+                  "आवाज़ पहचान की सेवा नहीं मिली। हैंड्स फ्री मोड बंद है।"
+                )
+              : words(
+                  "The browser stopped voice input. Tap to turn it on again, or press T to type.",
+                  "ब्राउज़र ने माइक रोक दिया। फिर चालू करने के लिए टैप करें या टी दबाकर टाइप करें।"
+                );
+      speak(msg);
+    };
+    try {
+      r = new R();
+      rec = r;
+      r.lang = locale;
+      r.interimResults = false;
+      r.continuous = false;
+      r.maxAlternatives = 1;
+      state("listening");
+      announce(
+        words(
+          "Listening. Say stop listening to end the conversation.",
+          "सुन रहा हूँ। बंद करने के लिए कहिए, माइक बंद करो।"
+        )
+      );
+      r.onspeechstart = () => {
+        if (current()) stage.pulse(0.42);
+      };
+      r.onnomatch = quiet;
+      r.onresult = (e) => {
+        if (!current()) return;
+        const result = e.results?.[e.resultIndex || 0];
+        if (result?.isFinal === false) return;
+        const line = result?.[0]?.transcript?.trim();
+        if (!line) {
+          quiet();
+          return;
+        }
+        silence = rapidEnds = netErrors = 0;
+        releaseInput();
+        void execute(line, tok);
+      };
+      r.onerror = (e) => fail(e.error);
+      r.onend = () => {
+        if (!current()) return;
+        clearTimeout(recordLimit);
+        if (performance.now() - began < 650) {
+          if (++rapidEnds >= 3) {
+            fail("ended");
+            return;
+          }
+        } else rapidEnds = 0;
+        rec = null;
+        silence++;
+        scheduleListen(Math.min(1850, 330 + silence * 140));
+      };
+      recordLimit = setTimeout(quiet, 26000);
+      r.start();
+    } catch (_) {
+      if (rec === r && r) fail("unavailable");
+      else {
+        cancel();
+        announce(words("Voice input unavailable.", "आवाज़ पहचान उपलब्ध नहीं है।"));
+      }
+    }
+  }
+  function switchLanguage(l) {
+    const keep = armed;
+    invalidate();
+    setArmed(keep);
+    useLanguage(l);
+  }
+  function previewVoice() {
+    cancel();
+    unlock();
+    if (!allowed()) return;
+    speak(words("I am Jarvis. This is my new speaking voice.", "मैं जार्विस हूँ। आप मेरी नई आवाज़ सुन रहे हैं।"));
+  }
   const deDigit = (s) => s.replace(/[०-९]/g, (n) => String(n.charCodeAt(0) - 2406));
   function local(q) {
+    if (
+      /^(?:(?:please|बस|प्लीज़)[ ,]+)?(?:stop listening|turn (?:the )?(?:mic(?:rophone)? )?off|switch off (?:the )?mic(?:rophone)?|end (?:the )?conversation|go to sleep|(?:mic|mike|माइक|माईक|माइक्रोफोन|माइक्रोफ़ोन|मिक|conversation|बातचीत|सुनना) (?:band|बंद|बन्द|off|ऑफ|ऑफ़)(?: (?:kar(?:o)?|कर|करो))?(?: (?:do|दो|dijiye|दीजिए))?|so jao|सो जाओ|चुप हो जाओ)$/i.test(
+        q
+      )
+    ) {
+      cancel();
+      speak(words("Microphone off.", "माइक बंद है।"));
+      return true;
+    }
+    if (/^(?:test (?:your )?voice|voice demo|awaaz sunao|अपनी आवाज़ सुनाओ|आवाज सुनाओ)$/.test(q)) {
+      speak(words("I am Jarvis. This is my new speaking voice.", "मैं जार्विस हूँ। आप मेरी नई आवाज़ सुन रहे हैं।"));
+      return true;
+    }
     if (/^(?:speak (?:in )?english|english (?:mode|please)|इंग्लिश(?: मोड)?|अंग्रेज़ी में बोलो)$/i.test(q)) {
       useLanguage("en-IN");
       return true;
@@ -1479,8 +2139,8 @@ function makeStage(canvas) {
     if (/^(?:help|commands|madad|मदद|मदद करो|क्या कर सकते हो|what can you do|hello|hi|नमस्ते|हेलो)$/i.test(q)) {
       speak(
         words(
-          "At your service. Try: time in Tokyo, weather in Delhi, world headlines, or set a timer for one minute. Tap once for each command.",
-          "मैं तैयार हूँ। बोलिए, टोक्यो में कितने बजे हैं, दिल्ली का मौसम बताओ, दुनिया की खबरें सुनाओ, या एक मिनट का टाइमर लगाओ। हर आदेश के लिए एक बार टैप कीजिए।"
+          "At your service. Try: time in Tokyo, weather in Delhi, world headlines, or set a timer for one minute. When I finish, just ask your next question.",
+          "मैं तैयार हूँ। बोलिए, टोक्यो में कितने बजे हैं, दिल्ली का मौसम बताओ, दुनिया की खबरें सुनाओ, या एक मिनट का टाइमर लगाओ। मेरे जवाब के बाद सीधे अगला सवाल पूछिए।"
         )
       );
       return true;
@@ -1533,7 +2193,13 @@ function makeStage(canvas) {
       clearTimeout(timer);
       timer = setTimeout(() => {
         timer = null;
-        cancel();
+        if (document.hidden) {
+          announce(words("Timer complete.", "टाइमर पूरा हुआ।"));
+          return;
+        }
+        const keep = armed;
+        invalidate();
+        setArmed(keep);
         speak(words("Your timer is complete.", "आपका टाइमर पूरा हो गया।"));
       }, ms);
       speak(
@@ -1588,30 +2254,50 @@ function makeStage(canvas) {
   }
   async function execute(raw, tok) {
     if (tok !== ticket) return;
-    endRecording();
+    releaseInput();
     clearTimeout(recordLimit);
     let text = raw.trim().slice(0, 360);
     let q = text
       .replace(/^(?:(?:hey|okay|ok|हे|ओके)\s+)?(?:jarvis|जार्विस|जारविस|जर्विस)[\s,.:।!-]*/i, "")
       .replace(/[?!.।]+$/, "")
+      .replace(/[,،]/g, " ")
+      .replace(/\s+/g, " ")
       .trim()
       .toLowerCase();
     if (!q) {
-      speak(words("Ready. Tap again and give me a command.", "तैयार हूँ। फिर टैप करके आदेश दीजिए।"));
+      speak(words("Yes? What would you like to know?", "जी, बोलिए। क्या जानना चाहेंगे?"));
       return;
     }
     if (local(q)) {
       follow = "";
+      lastTopic = "";
       return;
     }
     state("thinking");
     stage.pulse(0.48);
     announce(words("Looking that up.", "पता कर रहा हूँ।"));
     try {
-      const result = await api(text, tok);
+      // A tightly-scoped spoken ellipsis: after a city clock/weather/date,
+      // "aur London mein?" does not need to repeat the whole previous question.
+      let lookup = text;
+      if (lastTopic && !follow && performance.now() - topicAt < 120000) {
+        const m = q.match(
+          /^(?:what about|how about|and in)\s+(.{1,52})$|^(?:और|aur)\s+(.{1,52}?)\s+(?:में|का|की|mein|me|ka|ki)$/i
+        );
+        const city = m && (m[1] || m[2]);
+        if (
+          city &&
+          /^[\p{L}\p{M} .’'-]+$/u.test(city) &&
+          !/(weather|time|news|mausam|समय|मौसम|खबर)/i.test(city)
+        )
+          lookup = lastTopic + " in " + city;
+      }
+      const result = await api(lookup, tok);
       if (tok !== ticket) return;
       if (!result || typeof result.text !== "string") throw Error("reply");
       follow = result.follow || "";
+      lastTopic = ["time", "weather", "date"].includes(result.topic) ? result.topic : "";
+      topicAt = performance.now();
       if (result.source === "OpenRouter") {
         past.push({ role: "user", content: text }, { role: "assistant", content: result.text.slice(0, 440) });
         past = past.slice(-4);
@@ -1629,99 +2315,12 @@ function makeStage(canvas) {
         );
     }
   }
-  function begin() {
-    if (phase !== "idle") {
-      cancel();
-      return;
-    }
-    if (!permitted()) return;
-    const R = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let tok = ++ticket;
-    if (!R) {
-      speak(
-        words(
-          "Voice recognition is unavailable in this browser. Press T, type a command, and press Enter, or open this page in Chrome or Edge.",
-          "इस ब्राउज़र में आवाज़ पहचान उपलब्ध नहीं है। टी दबाकर आदेश टाइप करें और एंटर दबाएँ, या क्रोम या एज में खोलें।"
-        ),
-        locale,
-        tok
-      );
-      return;
-    }
-    try {
-      let r = new R();
-      rec = r;
-      r.lang = locale;
-      r.interimResults = false;
-      r.continuous = false;
-      r.maxAlternatives = 1;
-      state("listening");
-      stage.pulse(0.66);
-      announce(words("Listening for one command.", "एक आदेश सुन रहा हूँ।"));
-      r.onspeechstart = () => {
-        if (tok === ticket) stage.pulse(0.65);
-      };
-      r.onresult = (e) => {
-        if (tok !== ticket || rec !== r) return;
-        const line = e.results?.[e.resultIndex || 0]?.[0]?.transcript || "";
-        execute(line, tok);
-      };
-      r.onerror = (e) => {
-        if (tok !== ticket || rec !== r) return;
-        clearTimeout(recordLimit);
-        endRecording();
-        let m =
-          e.error === "not-allowed" || e.error === "service-not-allowed"
-            ? words(
-                "The microphone is blocked. Allow it in the browser, open the preview in its own tab, or press T to type.",
-                "माइक की अनुमति नहीं मिली। ब्राउज़र में अनुमति दें, प्रीव्यू अलग टैब में खोलें, या टी दबाकर टाइप करें।"
-              )
-            : e.error === "audio-capture"
-              ? words(
-                  "No microphone was found. Press T to type a command.",
-                  "माइक नहीं मिला। टी दबाकर आदेश टाइप करें।"
-                )
-              : e.error === "network"
-                ? words(
-                    "The speech service is unreachable. Press T to type a command.",
-                    "आवाज़ पहचान की सेवा उपलब्ध नहीं है। टी दबाकर आदेश टाइप करें।"
-                  )
-                : words("I did not hear a command. Tap to try again.", "आदेश सुनाई नहीं दिया। फिर टैप कीजिए।");
-        speak(m, locale, tok);
-      };
-      r.onend = () => {
-        if (tok === ticket && rec === r) {
-          rec = null;
-          clearTimeout(recordLimit);
-          state("idle");
-          announce(words("Microphone off.", "माइक बंद है।"));
-        }
-      };
-      recordLimit = setTimeout(() => {
-        if (tok === ticket && rec === r) {
-          endRecording();
-          state("idle");
-          announce(words("Microphone off.", "माइक बंद है।"));
-        }
-      }, 15000);
-      r.start();
-    } catch (_) {
-      endRecording();
-      clearTimeout(recordLimit);
-      speak(
-        words(
-          "Voice input did not start. Press T to type a command.",
-          "आवाज़ पहचान शुरू नहीं हुई। टी दबाकर टाइप करें।"
-        ),
-        locale,
-        tok
-      );
-    }
-  }
   function startTyping() {
     if (typed) return;
-    if (phase !== "idle") cancel();
-    if (!permitted()) return;
+    setArmed(false);
+    invalidate();
+    unlock();
+    if (!allowed()) return;
     ticket++;
     typed = true;
     field.value = "";
@@ -1817,21 +2416,21 @@ function makeStage(canvas) {
       rad = Math.min(r.width * 0.42, r.height * 0.425);
     if (Math.hypot(x / 1.06, y) > rad * 1.08) return;
     if (performance.now() - d.t >= 650) full();
-    else begin();
+    else toggle();
   });
   core.addEventListener("pointercancel", () => {
     down = null;
     stage.hold(false);
   });
   core.addEventListener("click", (e) => {
-    if (e.detail === 0) begin();
+    if (e.detail === 0) toggle();
   });
   document.addEventListener("keydown", (e) => {
     if (typed || e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
     let k = e.key.toLowerCase();
     if (k === " " || k === "enter") {
       e.preventDefault();
-      begin();
+      toggle();
     } else if (k === "escape") {
       cancel();
       announce(words("Cancelled.", "रद्द कर दिया।"));
@@ -1841,8 +2440,11 @@ function makeStage(canvas) {
       e.preventDefault();
       startTyping();
     } else if (k === "h" || k === "e") {
-      cancel();
-      useLanguage(k === "h" ? "hi-IN" : "en-IN");
+      unlock();
+      switchLanguage(k === "h" ? "hi-IN" : "en-IN");
+    } else if (k === "v") {
+      e.preventDefault();
+      previewVoice();
     } else if (k === "o") {
       cancel();
       owner();
@@ -1866,7 +2468,7 @@ function makeStage(canvas) {
     clearTimeout(timer);
     timer = null;
   });
+  setArmed(false);
   state("idle");
 })();
-
 </script></body></html>
