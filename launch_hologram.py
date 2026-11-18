@@ -10,6 +10,7 @@ import threading
 import webbrowser
 from pathlib import Path
 
+from hologram import voice
 from hologram.server import make_server
 from hologram.skills import answer
 
@@ -98,10 +99,17 @@ def main(argv=None):
         server = make_server(args.port, preview=args.preview)
     except OSError as exc:
         ap.exit(1, f"Cannot open port {args.port}: {exc}. Try --port 0.\n")
+    if server.neural_voice:
+        voice.engine.prepare()
     url = f"http://127.0.0.1:{server.server_port}/"
     mode = "Shared public-data preview" if args.preview else "Local device only"
+    sound = (
+        "on-host neural Hindi / English (first run downloads ~94 MB)"
+        if server.neural_voice
+        else "system voice (use the enhanced setup for the male neural voices)"
+    )
     print(
-        f"JARVIS hologram | {mode}\n{url}\nTap the core or press Space to speak. F: full screen. Ctrl+C here to stop.",
+        f"JARVIS hologram | {mode}\nVoice: {sound}\n{url}\nTap once for hands-free conversation; Esc stops. V: preview the voice. F: full screen. Ctrl+C here to stop.",
         flush=True,
     )
     if not args.no_open and not args.preview:

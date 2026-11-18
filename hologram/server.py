@@ -12,27 +12,36 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from . import voice
 from .skills import MAX_QUERY, RateLimit, answer, reply
 
 UI = Path(__file__).parent / "ui" / "index.html"
 
 
 def make_server(port=8765, *, preview=False):
+    neural = voice.available(os.environ.get("JARVIS_VOICE", "auto"))
     body = (
         UI.read_text(encoding="utf-8")
         .replace(
             '<meta name="jarvis-host" content="portable">',
             '<meta name="jarvis-host" content="http">',
         )
+        .replace(
+            '<meta name="jarvis-voice" content="system">',
+            '<meta name="jarvis-voice" content="neural">'
+            if neural
+            else '<meta name="jarvis-voice" content="system">',
+        )
         .encode()
     )
     script = body.split(b"<script>", 1)[1].split(b"</script>", 1)[0]
     digest = base64.b64encode(hashlib.sha256(script).digest()).decode()
-    csp = f"default-src 'none'; script-src 'sha256-{digest}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'"
+    csp = f"default-src 'none'; script-src 'sha256-{digest}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; media-src blob: data:; base-uri 'none'; form-action 'none'"
     if not preview:
         csp += "; frame-ancestors 'self'"
     limit = RateLimit(35 if preview else 24)
     slots = threading.BoundedSemaphore(6)
+    voice_limit = RateLimit(55, 60)
     # The shared host deliberately never reads the provider key. This is not a
     # LAN or public gateway to a user's desktop, accounts or paid AI service.
     ai_key = "" if preview else os.environ.get("OPENROUTER_API_KEY", "")
@@ -40,7 +49,7 @@ def make_server(port=8765, *, preview=False):
     model = "openrouter/auto" if preview else os.environ.get("OPENROUTER_MODEL", "openrouter/auto")
 
     class Handler(BaseHTTPRequestHandler):
-        server_version = "Amber/1"
+        server_version = "Amber/2"
         sys_version = ""
 
         def log_message(self, fmt, *args):
@@ -103,7 +112,8 @@ def make_server(port=8765, *, preview=False):
         def do_POST(self):
             if not self.host_ok():
                 return self.out(403, {"error": "Local host only"})
-            if urlsplit(self.path).path != "/api/command":
+            route = urlsplit(self.path).path
+            if route not in {"/api/command", "/api/voice"}:
                 return self.out(404, {"error": "Not found"})
             if self.headers.get_content_type() != "application/json":
                 return self.out(415, {"error": "Use JSON"})
@@ -128,6 +138,19 @@ def make_server(port=8765, *, preview=False):
                 return self.out(413, {"error": "Use one short command"})
             try:
                 req = json.loads(self.rfile.read(size))
+                if route == "/api/voice":
+                    if (
+                        not isinstance(req, dict)
+                        or not isinstance(req.get("text"), str)
+                        or not 0 < len(req["text"]) <= voice.MAX_SEGMENT
+                        or req.get("lang") not in ("hi-IN", "en-IN")
+                    ):
+                        return self.out(400, {"ok": False, "reason": "invalid"})
+                    if not neural or not voice_limit.allow(self.client_address[0]):
+                        return self.out(200, {"ok": False, "reason": "system"})
+                    return self.out(
+                        200, voice.engine.speak(req["text"], req["lang"], enabled=neural)
+                    )
                 q = req["query"]
                 lang = req.get("lang", "hi-IN")
                 history = req.get("history", [])
@@ -168,4 +191,6 @@ def make_server(port=8765, *, preview=False):
         daemon_threads = True
         allow_reuse_address = True
 
-    return Host(("0.0.0.0" if preview else "127.0.0.1", port), Handler)
+    host = Host(("0.0.0.0" if preview else "127.0.0.1", port), Handler)
+    host.neural_voice = neural
+    return host

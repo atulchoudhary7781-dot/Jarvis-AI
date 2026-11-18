@@ -1,0 +1,3 @@
+# Optional on a desktop. Installs the on-host Hindi/English neural speech engine.
+# The stock-Python launcher otherwise uses the best matching device voice.
+kokoro-onnx==0.6.1; python_version >= '3.10' and python_version < '3.14'

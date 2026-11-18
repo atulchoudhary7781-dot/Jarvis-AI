@@ -12,6 +12,8 @@ from pathlib import Path
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+from hologram import voice
 from hologram.skills import MAX_QUERY, RateLimit, answer, reply
 
 st.set_page_config(
@@ -68,11 +70,17 @@ if owner and has_login:
     except (AttributeError, KeyError, FileNotFoundError):
         pass
 allowed = not owner or verified
+neural = allowed and voice.available(setting("JARVIS_VOICE", "auto"))
+if neural:
+    voice.engine.prepare()
+# Deliver a clip only once; it is not a server-side audio cache.
+last_result = st.session_state.pop("amber_result", None)
 gate = dict(ownerRequired=bool(owner), authorized=allowed, hasLogin=has_login, signedIn=signed)
 req = component(
     contract="amber.v1",
     access=gate,
-    result=st.session_state.get("amber_result"),
+    neural=neural,
+    result=last_result if allowed else None,
     key="amber-screen",
     default=None,
 )
@@ -89,6 +97,25 @@ if isinstance(req, dict):
             st.login()
         elif kind == "logout" and owner and has_login and signed:
             st.logout()
+        elif kind == "voice":
+            text = req.get("text")
+            lang = req.get("lang")
+            stamp = time.monotonic()
+            hits = [t for t in st.session_state.get("amber_voice_hits", []) if t > stamp - 60]
+            if (
+                neural
+                and isinstance(text, str)
+                and 0 < len(text) <= voice.MAX_SEGMENT
+                and lang in ("hi-IN", "en-IN")
+                and len(hits) < 48
+                and public_limit().allow("voice")
+            ):
+                st.session_state.amber_voice_hits = hits + [stamp]
+                clip = voice.engine.speak(text, lang, enabled=neural)
+            else:
+                clip = {"ok": False, "reason": "system"}
+            st.session_state.amber_result = dict(clip, id=rid)
+            st.rerun()
         elif kind == "command":
             lang = req.get("lang", "hi-IN")
             lang = "hi-IN" if isinstance(lang, str) and lang.startswith("hi") else "en-IN"
