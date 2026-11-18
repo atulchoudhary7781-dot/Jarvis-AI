@@ -1,0 +1,1872 @@
+<!doctype html>
+<html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#020305"><meta name="jarvis-host" content="portable"><meta name="color-scheme" content="dark"><title>J.A.R.V.I.S. · Amber core</title><link rel="icon" href="data:,"><style>
+:root{color-scheme:dark;background:#020305}*{box-sizing:border-box}html,body,main{width:100%;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}canvas{display:block;width:100%;height:100%;background:#020305;outline:none;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;cursor:grab}canvas:active{cursor:grabbing}canvas.rest{cursor:none}.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;clip:rect(0,0,0,0);clip-path:inset(50%);overflow:hidden;white-space:nowrap;border:0}
+</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space for a single voice command. Drag to orbit. F for full screen; Escape to cancel." aria-describedby="keys"></canvas><input id="command" class="sr" aria-label="Voice alternative: type one command and press Enter" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><p class="sr" id="keys" lang="en">T: type a command without a visible overlay. H: Hindi voice. E: English voice. P: pause or resume rotation. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><div class="sr" role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
+'use strict';
+/* AMBER / Geometry atlas. All positions are generated in three dimensions.
+   Four moving assemblies: outer skin, inner machinery, signal bus, and lens. */
+function makeAtlas(lean) {
+  let seed = 0x6a617276;
+  const rand = () => (seed = (Math.imul(1664525, seed) + 1013904223) >>> 0) / 4294967296;
+  const tau = 2 * Math.PI,
+    range = (a, b) => a + (b - a) * rand(),
+    integer = (a, b) => Math.floor(range(a, b + 1)),
+    sign = () => (rand() < 0.5 ? -1 : 1);
+  const sea = (s, t) =>
+    0.48 * Math.sin(s * 9.7 + t * 3.1) +
+    0.27 * Math.sin(s * 23.2 - t * 12.7) +
+    0.16 * Math.sin(s * 45.4 + t * 30.6) +
+    0.09 * Math.sin(s * 94.5 - t * 63.1);
+  const V = (x, y, z) => [x, y, z],
+    plus = (a, b) => a.map((v, i) => v + b[i]),
+    mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t),
+    scale = (p, s) => p.map((v) => v * s);
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const unit = (p) => scale(p, 1 / (Math.hypot(...p) || 1));
+  const sph = (a, b, r = 1) => [r * Math.cos(b) * Math.cos(a), r * Math.sin(b), r * Math.cos(b) * Math.sin(a)];
+  const frame = (x, y, z) => {
+    let sx = Math.sin(x),
+      cx = Math.cos(x),
+      sy = Math.sin(y),
+      cy = Math.cos(y),
+      sz = Math.sin(z),
+      cz = Math.cos(z);
+    return (a, b, c) => {
+      let yy = b * cx - c * sx,
+        zz = b * sx + c * cx,
+        xx = a * cy + zz * sy;
+      return [xx * cz - yy * sz, xx * sz + yy * cz, -a * sy + zz * cy];
+    };
+  };
+  const A = { line: [], spark: [], foil: [] };
+  let group = 0;
+  function ink(light, heat = 0.48) {
+    heat = Math.max(0, Math.min(1, heat));
+    return [
+      light * (0.94 + 0.06 * heat),
+      light * (0.217 + 0.465 * heat + 0.111 * heat * heat),
+      light * (0.012 + 0.061 * heat + 0.225 * heat ** 4),
+    ];
+  }
+  function vertex(buf, p, c, w, k) {
+    buf.push(p[0], p[1], p[2], c[0], c[1], c[2], w, k, group);
+  }
+  function line(p, q, c, other = c, seed = rand()) {
+    vertex(A.line, p, c, 1, seed);
+    vertex(A.line, q, other, 1, seed);
+  }
+  function dot(p, c, size = 1.8) {
+    vertex(A.spark, p, c, size, rand());
+  }
+  function tri(a, b, c, col) {
+    let k = rand();
+    vertex(A.foil, a, col, 1, k);
+    vertex(A.foil, b, col, 1, k);
+    vertex(A.foil, c, col, 1, k);
+  }
+  function path(fn, start, end, count, power, heat = 0.5, rough = 0.45, drop = 0.02) {
+    let p = fn(start),
+      v = ink(power, heat),
+      phase = range(0, tau);
+    for (let i = 1; i <= count; i++) {
+      let u = i / count,
+        t = start + (end - start) * u,
+        q = fn(t),
+        w =
+          power *
+          (1 -
+            rough +
+            rough *
+              (0.52 + 0.29 * Math.sin(phase + t * 12) + 0.19 * Math.sin(t * 52 + phase)) *
+              range(0.58, 1.33));
+      let c = ink(w, heat + 0.08 * Math.sin(t * 9));
+      if (rand() > drop) line(p, q, v, c);
+      p = q;
+      v = c;
+    }
+  }
+  // Interrupted gyroscopic ribbons: layers of hairline rails, etched teeth,
+  // splinters and translucent foil occupy the same curved, imperfect band.
+  function ribbon(f, r, segments, width, power, complexity, phase = 0) {
+    const at = (t, d = 0, h = 0) => {
+      let rr = r + h + r * (0.008 * Math.sin(3 * t + phase) + 0.0045 * Math.sin(7 * t - phase));
+      return f(rr * Math.cos(t), rr * Math.sin(t), d + 0.014 * r * Math.sin(2 * t + phase));
+    };
+    for (const [lo, hi] of segments) {
+      let span = hi - lo,
+        n = Math.max(8, Math.ceil(span * r * 55));
+      for (let k = 0; k < complexity; k++) {
+        let d = range(-width, width),
+          h = range(-0.008, 0.008),
+          a = lo + span * range(0, 0.09),
+          b = hi - span * range(0, 0.09),
+          v = power * (k < 2 ? range(0.48, 0.95) : range(0.09, 0.48));
+        path((t) => at(t, d + 0.0029 * Math.sin(t * 14 + k), h), a, b, n, v, range(0.16, 0.72), 0.72, 0.035);
+      }
+      let phase2 = range(0, tau),
+        count = Math.ceil(span * r * (lean ? 100 : 156));
+      for (let k = 0; k < count; k++) {
+        let t = range(lo, hi),
+          pile = 0.5 + 0.5 * Math.sin(t * 6.2 + phase2) * Math.cos(t * 2.8 - phase);
+        if (rand() > 0.35 + pile * 0.71) continue;
+        let d = range(-width, width) * (1 + 0.28 * Math.sin(t * 15)),
+          h = range(-0.011, 0.012),
+          p = at(t, d, h),
+          heat = range(0.21, 0.94),
+          e = power * range(0.15, 1.5) * (0.24 + pile),
+          col = ink(e, heat);
+        let len = range(0.003, 0.045) / (r + 0.1);
+        line(p, at(t + len, d + range(-0.003, 0.003), h), col);
+        if (rand() < 0.42) dot(p, ink(e * 1.15, heat), range(1.3, 3.5));
+        if (rand() < 0.15) {
+          let dv = width * range(0.07, 0.35);
+          tri(p, at(t + len, d, h), at(t + len * 0.73, d + dv, h), ink(e * 0.28, heat));
+        }
+      }
+      let pitch = range(0.018, 0.032) / (r + 0.1);
+      for (let t = lo; t < hi; t += pitch) {
+        if (rand() < 0.36) continue;
+        let h = range(-0.002, 0.002);
+        line(
+          at(t, -width * 1.18, h),
+          at(t, -width * range(0.35, 0.94), h),
+          ink(power * range(0.12, 0.9), 0.52)
+        );
+      }
+    }
+  }
+  // Broken shell plates. Traces follow local curved surfaces; no complete globe grid.
+  for (let i = 0; i < (lean ? 74 : 103); i++) {
+    let a = range(0, tau),
+      b = Math.asin(range(-0.99, 0.99)),
+      r = range(0.913, 1.006),
+      w = range(0.11, 0.43) / (Math.cos(b) * 0.53 + 0.51),
+      h = range(0.035, 0.175),
+      shear = range(-0.26, 0.26),
+      slope = range(-0.22, 0.22),
+      ph = range(0, tau),
+      bright = range(0.35, 1.04);
+    let panel = (u, v, add = 0) =>
+      sph(
+        a + u * w + v * h * shear + 0.012 * Math.sin(v * 2 + ph),
+        b + v * h + u * w * slope + 0.005 * Math.sin(u * 6 + ph),
+        r + add + 0.002 * Math.sin(v * 9 + u * 5)
+      );
+    if (rand() < 0.4) {
+      // extremely thin hints of faceted amber glass
+      let c = ink(range(0.006, 0.022) * bright, 0.23);
+      let nu = 4,
+        nv = 2;
+      for (let x = 0; x < nu; x++)
+        for (let y = 0; y < nv; y++) {
+          if (rand() < 0.24) continue;
+          let u = -1 + (2 * x) / nu,
+            v = -1 + (2 * y) / nv,
+            du = 2 / nu,
+            dv = 2 / nv;
+          tri(panel(u, v), panel(u + du, v), panel(u, v + dv), c);
+          tri(panel(u + du, v), panel(u + du, v + dv), panel(u, v + dv), c);
+        }
+    }
+    for (let k = 0; k < integer(3, 7); k++) {
+      let v = range(-1, 1),
+        u = range(-1, 0.28),
+        end = Math.min(1, u + range(0.3, 1.65)),
+        step = range(0.055, 0.32) * sign(),
+        knee = u + (end - u) * range(0.3, 0.7),
+        k2 = knee + 0.12;
+      let fold = (x) => v + (x < knee ? 0 : x < k2 ? ((x - knee) * step) / 0.12 : step);
+      const fn = (x) => panel(x, fold(x));
+      path(
+        fn,
+        u,
+        end,
+        Math.ceil((end - u) * w * 38) + 2,
+        bright * range(0.16, 0.78),
+        range(0.18, 0.67),
+        0.63,
+        0.08
+      );
+      if (rand() < 0.45) dot(fn(u), ink(bright * range(0.4, 1.25), 0.56), range(1.4, 2.9));
+      if (rand() < 0.19) path((x) => panel(x, fold(x) + 0.075), u, end, 14, bright * 0.21, 0.49, 0.4, 0.05);
+    }
+    // Small banks of parallel interrupted conductors; gaps are intentional.
+    let rows = integer(3, 10),
+      cols = integer(5, 14),
+      u0 = range(-1, -0.25),
+      v0 = range(-0.96, -0.12),
+      du = range(0.032, 0.1),
+      dv = range(0.055, 0.15);
+    for (let y = 0; y < rows; y++)
+      for (let x = 0; x < cols; x++) {
+        let u = u0 + du * x,
+          v = v0 + dv * y;
+        if (rand() < 0.38 + 0.14 * Math.sin(x + ph)) continue;
+        if (u > 1 || v > 1) continue;
+        let lum = bright * range(0.12, 1) * (0.4 + (0.6 * y) / rows),
+          c = ink(lum, range(0.28, 0.8));
+        line(panel(u, v, 0.002), panel(u + du * range(0.32, 0.86), v, 0.002), c);
+        if (rand() < 0.2) dot(panel(u, v), c, range(1.2, 2.6));
+      }
+    if (rand() < 0.36) {
+      path((u) => panel(u, 1), -0.95, 0.98, 25, bright * 0.51, 0.55, 0.61, 0.045);
+      path((v) => panel(0.98, v), -0.64, 1, 9, bright * 0.35, 0.61);
+    }
+  }
+  // Broken primary belt, counterweights, polar filings. Their widths, planes
+  // and gaps differ so that the silhouette never reads as a set of flat hoops.
+  ribbon(
+    frame(1.12, -0.17, 0.105),
+    0.995,
+    [
+      [-0.51, 0.92],
+      [1.06, 2.55],
+      [2.59, 3.63],
+      [3.85, 4.72],
+      [4.96, 5.57],
+    ],
+    0.021,
+    1.06,
+    6,
+    0.45
+  );
+  ribbon(
+    frame(0.42, 1.04, 0.38),
+    0.961,
+    [
+      [-1.04, 0.08],
+      [0.31, 1.5],
+      [1.65, 2.27],
+      [2.66, 3.47],
+      [3.6, 4.12],
+    ],
+    0.017,
+    0.83,
+    5,
+    2.1
+  );
+  ribbon(
+    frame(-0.18, -0.52, -0.62),
+    0.987,
+    [
+      [-0.15, 0.86],
+      [1.15, 2.04],
+      [2.65, 3.35],
+      [4.02, 4.87],
+    ],
+    0.018,
+    0.69,
+    4,
+    3.2
+  );
+  ribbon(
+    frame(1.4, -0.41, 0.46),
+    0.894,
+    [
+      [-0.38, 0.68],
+      [1.38, 2.2],
+      [2.3, 3.25],
+      [4.43, 5.4],
+    ],
+    0.013,
+    0.76,
+    4,
+    1
+  );
+  ribbon(
+    frame(-0.87, -1.12, 0.1),
+    0.954,
+    [
+      [0.12, 1.14],
+      [1.37, 1.9],
+      [2.33, 3.12],
+      [3.57, 4.92],
+    ],
+    0.01,
+    0.53,
+    3,
+    0.6
+  );
+  // Stochastic silt on curved fracture boundaries, not a homogeneous star field.
+  for (let i = 0; i < (lean ? 4700 : 8050); i++) {
+    let a = range(0, tau),
+      b = Math.asin(range(-1, 1)),
+      m = sea(a, b),
+      n = sea(b + 0.57, a * 0.83 - 1.12),
+      ridge = Math.exp(-Math.abs(m - 0.14) * 17);
+    if (rand() > (0.065 + 0.84 * ridge) * (0.65 + 0.35 * Math.sin(2 * a + 4 * b))) continue;
+    let r = range(0.941, 1.009) + 0.005 * m,
+      p = sph(a, b, r),
+      val = range(0.32, 1.31) * (0.43 + ridge * 0.71),
+      hot = range(0.37, 0.93);
+    dot(p, ink(val, hot), range(1.15, 3.5));
+    if (rand() < 0.32) line(p, sph(a + range(0.002, 0.017), b + range(-0.005, 0.006), r), ink(val * 0.77, hot));
+  }
+  group = 1;
+  ribbon(
+    frame(0.64, -0.22, 0.1),
+    0.698,
+    [
+      [-0.72, 0.64],
+      [0.78, 1.05],
+      [1.31, 2.96],
+      [3.23, 4.02],
+      [4.15, 5.02],
+    ],
+    0.021,
+    0.81,
+    6,
+    2.4
+  );
+  ribbon(
+    frame(1.24, 0.4, -0.25),
+    0.737,
+    [
+      [-0.5, 0.94],
+      [1.11, 2.13],
+      [2.23, 3.32],
+      [3.7, 4.93],
+    ],
+    0.029,
+    1.02,
+    6,
+    0.72
+  );
+  ribbon(
+    frame(-0.23, 0.6, 0.15),
+    0.519,
+    [
+      [-1.32, 0.38],
+      [0.65, 1.71],
+      [2.83, 3.88],
+      [4.11, 4.76],
+    ],
+    0.018,
+    0.74,
+    4,
+    1.87
+  );
+  ribbon(
+    frame(1.35, -0.23, -0.17),
+    0.373,
+    [
+      [-0.52, 0.64],
+      [0.84, 2.99],
+      [3.2, 4.43],
+    ],
+    0.019,
+    0.84,
+    4,
+    0.2
+  );
+  // Fragments of inner translucent wafers; some appear through the open shell.
+  for (let i = 0; i < (lean ? 18 : 31); i++) {
+    let f = frame(range(0.22, 1.5), range(-1.1, 1.1), range(-0.9, 0.9)),
+      r = range(0.29, 0.82),
+      a = range(0, tau),
+      w = range(0.07, 0.51),
+      spread = range(0.01, 0.046);
+    for (let j = 0; j < integer(2, 6); j++) {
+      let rad = r + j * spread * 0.17;
+      path(
+        (t) => f(rad * Math.cos(t), rad * Math.sin(t), 0),
+        a,
+        a + w,
+        10,
+        range(0.13, 0.45),
+        range(0.18, 0.73),
+        0.6,
+        0.08
+      );
+    }
+  }
+  group = 2;
+  // Bundled looms grow out of an offset hub, bend at connectors, and branch
+  // into pads on the shell. Most of the sphere remains visually permeable.
+  const angles = [-0.38, 0.01, 0.72, 0.98, 1.32, 1.88, 2.03, 2.66, 2.91, 3.63, 3.96, 4.3, 4.6, 5.21, 5.74];
+  for (let i = 0; i < angles.length; i++) {
+    let a = angles[i],
+      z = range(-0.64, 0.68),
+      r = Math.sqrt(1 - z * z) * range(0.93, 1.006),
+      da = range(-0.18, 0.18),
+      d = V(Math.cos(a) * r, Math.sin(a) * r, z),
+      tangent = V(-Math.sin(a), Math.cos(a), 0);
+    let knots = [
+      V(0.077 * Math.cos(a + 0.27) - 0.025, 0.079 * Math.sin(a + 0.27) - 0.009, 0.083),
+      V(0.18 * Math.cos(a + 0.14), 0.18 * Math.sin(a + 0.14), range(0.012, 0.136)),
+      V(0.57 * Math.cos(a + da), 0.57 * Math.sin(a + da), z * 0.42 + range(-0.09, 0.09)),
+      d,
+    ];
+    for (let j = 0; j < integer(3, 7); j++) {
+      let offset = range(-0.016, 0.016),
+        prev;
+      for (let k = 0; k < 4; k++) {
+        let u = k / 3,
+          q = plus(knots[k], scale(tangent, offset * (0.43 + u) + 0.004 * Math.sin(j + k)));
+        if (prev) {
+          let p = prev,
+            power = range(0.23, 0.78) * (k === 1 ? 1.2 : 1);
+          path((t) => mix(p, q, t), 0, 1, 12, power, range(0.27, 0.68), 0.59, 0.045);
+        }
+        prev = q;
+        if (k === 2 && rand() < 0.72) dot(q, ink(0.95, 0.72), range(1.8, 4.7));
+      }
+    }
+    for (let b = 0; b < integer(3, 6); b++) {
+      let p = mix(knots[2], knots[3], range(0.08, 0.94)),
+        q = plus(p, scale(tangent, range(0.03, 0.112) * sign())),
+        q2 = plus(q, scale(unit(d), range(0.025, 0.15)));
+      if (Math.hypot(...q2) > 1.001) q2 = scale(unit(q2), 1.001);
+      line(p, q, ink(range(0.2, 0.63), 0.49));
+      line(q, q2, ink(range(0.2, 0.6), 0.49));
+      dot(q2, ink(range(0.55, 1.15), 0.61), range(1.5, 3.2));
+    }
+  }
+  // A bright folded stream runs tangentially into the aperture. Cross section
+  // varies continuously; threads split into clusters and a few isolated sparks.
+  const cubic = (p0, p1, p2, p3, t) => {
+    let u = 1 - t;
+    return p0.map((x, i) => u * u * u * x + 3 * u * u * t * p1[i] + 3 * u * t * t * p2[i] + t * t * t * p3[i]);
+  };
+  function plume(p0, p1, p2, p3, density, e, phase) {
+    const strand = (t, j) => {
+      let p = cubic(p0, p1, p2, p3, t),
+        w = (0.15 + Math.sin(Math.PI * t) ** 0.8) * (0.68 + 0.32 * Math.cos(t * 17 + phase)),
+        a = j * 4.21 + t * (4.3 + j * 0.03);
+      p[1] += 0.042 * w * Math.sin(a) + 0.011 * Math.sin(t * 30 + j * 0.42) * w;
+      p[2] += 0.039 * w * Math.cos(a);
+      p[0] += 0.016 * w * Math.sin(t * 15 + j * 2);
+      return p;
+    };
+    for (let j = 0; j < density; j++) {
+      let a = range(0.0, 0.39),
+        b = range(0.68, 1),
+        pow = e * range(0.16, 0.82);
+      path((t) => strand(t, j), a, b, 46, pow, range(0.38, 0.88), 0.86, 0.18);
+    }
+    for (let k = 0; k < density * 23; k++) {
+      let t = rand(),
+        p = strand(t, range(0, density)),
+        jitter = 0.015 * (0.33 + 0.67 * Math.sin(Math.PI * t));
+      p = plus(p, V(range(-jitter, jitter), range(-jitter, jitter), range(-jitter, jitter)));
+      let ee = e * range(0.24, 1.21) * (0.32 + 0.68 * Math.sin(t * 9 + phase) ** 2);
+      dot(p, ink(ee, range(0.4, 0.98)), range(1.35, 4.05));
+    }
+  }
+  plume(
+    V(-0.72, -0.22, 0.17),
+    V(-0.48, -0.02, 0.43),
+    V(-0.32, -0.29, 0.41),
+    V(0.018, -0.058, 0.13),
+    21,
+    1.2,
+    1.14
+  );
+  plume(V(-0.58, 0.48, -0.11), V(-0.42, 0.18, 0.07), V(-0.31, 0.27, 0.3), V(-0.1, 0.075, 0.12), 11, 0.79, 0.57);
+  group = 3;
+  const lens = frame(0.16, -0.28, -0.19);
+  const eye = (x, y, z) => plus(lens(x, y, z), V(-0.026, -0.004, 0.044));
+  // The lens is an annulus with a dark bore, not a luminous solid dot.
+  ribbon(
+    eye,
+    0.082,
+    [
+      [-0.2, 2.12],
+      [2.21, 5.97],
+    ],
+    0.01,
+    1.77,
+    6,
+    0.3
+  );
+  ribbon(
+    eye,
+    0.118,
+    [
+      [-0.44, 1.49],
+      [1.62, 3.05],
+      [3.22, 5.35],
+      [5.5, 5.8],
+    ],
+    0.009,
+    1.18,
+    5,
+    0.46
+  );
+  ribbon(
+    eye,
+    0.164,
+    [
+      [0.01, 0.85],
+      [1.1, 2.25],
+      [2.48, 3.24],
+      [3.56, 4.57],
+      [5.2, 5.8],
+    ],
+    0.007,
+    0.79,
+    3,
+    0.3
+  );
+  for (let j = 0; j < 48; j++) {
+    let a = (j * tau) / 48;
+    if (rand() < 0.2) continue;
+    let r = range(0.092, 0.105);
+    line(
+      eye(r * Math.cos(a), r * Math.sin(a), -0.003),
+      eye((r + 0.009) * Math.cos(a), (r + 0.009) * Math.sin(a), 0.001),
+      ink(range(0.43, 1.04), 0.72)
+    );
+  }
+  path((t) => eye(0.053 * Math.cos(t), 0.053 * Math.sin(t), -0.019), 0.18, 5.89, 69, 0.67, 0.72, 0.41, 0.06);
+  for (let i = 0; i < 570; i++) {
+    let a = range(0, tau),
+      b = range(0, tau),
+      r = 0.079 + 0.012 * Math.cos(b) + 0.0025 * Math.sin(a * 7),
+      p = eye(r * Math.cos(a), r * Math.sin(a), 0.013 * Math.sin(b));
+    dot(p, ink(range(0.31, 1.53), range(0.58, 0.99)), range(1.25, 2.9));
+  }
+  // Deposits of luminous, flaking material. Fine etching alone looks like wire;
+  // these folded slivers catch the light in little irregular islands instead.
+  function flake(p, u, v, e, h) {
+    let k = rand(),
+      q = plus(p, u),
+      s = plus(p, v);
+    vertex(A.foil, p, ink(e * 0.34, h - 0.1), 1, k);
+    vertex(A.foil, q, ink(e * 1.14, h + 0.08), 1, k);
+    vertex(A.foil, s, ink(e * 0.62, h), 1, k);
+  }
+  function alluvium(f, r, a, b, width, power, phase) {
+    let n = Math.ceil((b - a) * r * (lean ? 325 : 510));
+    for (let i = 0; i < n; i++) {
+      let t = range(a, b),
+        stream =
+          0.5 +
+          0.26 * Math.sin(t * 8.2 + phase) +
+          0.15 * Math.sin(t * 19.7 + phase * 2) +
+          0.09 * Math.sin(t * 39.1);
+      if (rand() > 0.18 + stream * 0.91) continue;
+      let v = (rand() + rand() + rand() - 1.5) * width * (0.47 + 1.6 * stream),
+        r0 = r + range(-0.014, 0.012) * (0.64 + stream),
+        sway = width * 0.42 * Math.sin(9 * t + phase) + 0.006 * Math.sin(22 * t);
+      let rr = r0 + r * (0.008 * Math.sin(3 * t + phase) + 0.0045 * Math.sin(7 * t - phase));
+      let at = (k, d, dr) =>
+        f((rr + dr) * Math.cos(k), (rr + dr) * Math.sin(k), sway + d + 0.014 * r * Math.sin(2 * k + phase));
+      let p = at(t, v, 0),
+        len = range(0.002, 0.018) * (rand() < 0.09 ? 2.2 : 1),
+        q = at(t + len / r, v + range(-0.005, 0.005), range(-0.003, 0.003)),
+        s = at(t + (len / r) * range(-0.35, 0.8), v + range(0.003, 0.012) * sign(), range(-0.006, 0.006));
+      let e = power * (0.3 + stream ** 2 * 1.75) * range(0.25, 1.65),
+        h = range(0.18, 0.93);
+      flake(p, plus(q, scale(p, -1)), plus(s, scale(p, -1)), e, h);
+      if (rand() < 0.72) dot(p, ink(e * range(0.65, 1.45), h), range(1.8, 5.4) * (rand() < 0.09 ? 1.7 : 1));
+      if (rand() < 0.18) line(p, q, ink(e * 1.15, h + 0.1));
+    }
+  }
+  group = 0;
+  for (let [a, b] of [
+    [-0.34, 0.77],
+    [1.13, 2.56],
+    [2.71, 3.37],
+    [4.04, 4.68],
+    [4.99, 5.51],
+  ])
+    alluvium(frame(1.12, -0.17, 0.105), 0.995, a, b, 0.033, 1.25, 0.45);
+  for (let [a, b] of [
+    [-0.77, 0.09],
+    [0.31, 1.48],
+    [1.72, 2.22],
+    [2.68, 3.3],
+    [3.61, 4.06],
+  ])
+    alluvium(frame(0.42, 1.04, 0.38), 0.961, a, b, 0.024, 1.13, 2.1);
+  for (let [a, b] of [
+    [0.15, 0.75],
+    [1.23, 2.02],
+    [2.7, 3.21],
+    [4.09, 4.81],
+  ])
+    alluvium(frame(-0.18, -0.52, -0.62), 0.987, a, b, 0.023, 0.96, 3.2);
+  // Small fields of torn foil and scattered point contacts on the outer shells.
+  for (let j = 0; j < (lean ? 37 : 57); j++) {
+    let a = range(0, tau),
+      b = Math.asin(range(-0.99, 0.99)),
+      rad = range(0.895, 1.003),
+      lat = range(0.067, 0.21),
+      lon = range(0.096, 0.32) / (0.62 + 0.38 * Math.cos(b)),
+      ph = range(0, tau),
+      strength = range(0.53, 1.38),
+      co = Math.cos(ph),
+      si = Math.sin(ph);
+    for (let i = 0; i < (lean ? 120 : 167); i++) {
+      let u = range(-1, 1),
+        v = range(-1, 1),
+        mask = 1 - u * u - v * v,
+        terrain = sea(u * 0.29 + ph, v * 0.26 + ph * 0.32),
+        vein = Math.exp(-Math.abs(terrain - 0.07) * 9.5);
+      if (mask < 0.04 || rand() > mask * (0.17 + vein * 1.22)) continue;
+      let x = a + lon * (u * co - v * si),
+        y = b + lat * (u * si + v * co),
+        r = rad + 0.014 * terrain + range(-0.004, 0.004),
+        p = sph(x, y, r);
+      let len = range(0.002, 0.017),
+        q = sph(x + len, y + len * 0.42, r + 0.001),
+        s = sph(x + len * 0.38, y + range(0.001, 0.008), r + range(-0.002, 0.003)),
+        e = strength * range(0.32, 1.43) * (0.58 + 0.77 * vein),
+        h = range(0.2, 0.94);
+      flake(p, plus(q, scale(p, -1)), plus(s, scale(p, -1)), e, h);
+      dot(p, ink(e, h), range(1.5, 4.8) * (rand() < 0.08 ? 1.6 : 1));
+    }
+  }
+  group = 1;
+  alluvium(frame(1.24, 0.4, -0.25), 0.737, 0.84, 3.11, 0.038, 1.12, 0.72);
+  alluvium(frame(0.64, -0.22, 0.1), 0.698, 3.25, 4.03, 0.028, 0.99, 2.4);
+  for (let k = 0; k < (lean ? 570 : 1100); k++) {
+    let a = range(0, tau),
+      b = Math.asin(range(-1, 1)),
+      r = range(0.24, 0.91),
+      p = sph(a, b, r),
+      n = sea(a, b);
+    if (n < -0.27 || Math.hypot(p[0], p[1]) < 0.095) continue;
+    let val = range(0.105, 0.72) * (0.55 + 0.55 * n);
+    dot(p, ink(val, range(0.23, 0.84)), range(1.3, 3.8) * (rand() < 0.055 ? 1.8 : 1));
+  }
+  group = 2;
+  plume(
+    V(-0.69, -0.2, 0.16),
+    V(-0.47, -0.04, 0.44),
+    V(-0.24, -0.28, 0.4),
+    V(0.032, -0.048, 0.13),
+    13,
+    1.17,
+    1.24
+  );
+
+  for (let k of Object.keys(A)) A[k] = new Float32Array(A[k]);
+  return A;
+}
+/* Render the same atlas using either WebGL (with two scales of optical bloom)
+   or a reduced perspective-projected Canvas2D pass on machines without GL. */
+function makeStage(canvas) {
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)"),
+    lean = Math.min(innerWidth, innerHeight) < 540 || (navigator.hardwareConcurrency || 8) < 4;
+  const atlas = makeAtlas(lean),
+    clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  let W = 1,
+    H = 1,
+    dpr = 1,
+    rad = 1,
+    mode = "idle",
+    energy = 0,
+    kick = 0,
+    clock = 0,
+    angle = 0,
+    pitch = 0,
+    yaw = 0,
+    pitchGoal = 0,
+    yawGoal = 0,
+    zoom = 1,
+    zoomGoal = 1,
+    speed = 1,
+    held = false,
+    auto = true;
+  let glowCanvas = null,
+    glowCtx = null;
+  let gl = null,
+    ctx = null,
+    drawGL = null,
+    changeSize = null,
+    last = -1,
+    lastDraw = -1000,
+    dirty = true,
+    raf = 0,
+    lost = false;
+  const names = ["foil", "line", "spark"];
+  function mat(x, y, z) {
+    let a = Math.cos(x),
+      b = Math.sin(x),
+      c = Math.cos(y),
+      d = Math.sin(y),
+      e = Math.cos(z),
+      f = Math.sin(z);
+    return [
+      c * e,
+      c * f,
+      -d,
+      b * d * e - a * f,
+      b * d * f + a * e,
+      b * c,
+      a * d * e + b * f,
+      a * d * f - b * e,
+      a * c,
+    ];
+  }
+  function mult(a, b) {
+    let m = [];
+    for (let j = 0; j < 3; j++)
+      for (let i = 0; i < 3; i++)
+        m[j * 3 + i] = a[i] * b[j * 3] + a[i + 3] * b[j * 3 + 1] + a[i + 6] * b[j * 3 + 2];
+    return m;
+  }
+  function frames() {
+    let base = mat(pitch, yaw, -0.022);
+    return [
+      mat(0.135 + 0.037 * Math.sin(angle * 0.8), angle + 0.06, 0.055),
+      mat(0.06, -angle * 0.56 - 0.23, -0.016),
+      mat(0.065 + 0.012 * Math.sin(angle), angle * 0.32 + 0.035, 0.008),
+      mat(0.056 * Math.sin(angle * 0.4), 0.22 * Math.sin(angle * 0.6), -angle * 0.38),
+    ].map((m) => mult(base, m));
+  }
+  function initGL() {
+    const vert = `precision highp float;
+      attribute vec3 pos, tint; attribute float size, seed, layer;
+      uniform mat3 turn[4]; uniform vec2 fit; uniform float tm, px, gain, beat;
+      varying vec3 lit; varying float vSeed;
+      void main(){vec3 p;
+        if(layer<.5)p=turn[0]*pos;else if(layer<1.5)p=turn[1]*pos;else if(layer<2.5)p=turn[2]*pos;else p=turn[3]*pos;
+        float depth=3.9/(3.9-p.z);gl_Position=vec4(p.xy*vec2(1.042,.986)*fit*depth,0.,1.);
+        float fog=mix(.20,1.13,smoothstep(-.92,.78,p.z));
+        float lamp=.90+.18*cos(p.x*5.2+p.y*3.1-p.z*2.)+.09*sin(3.*p.x-7.*p.y);
+        float flash=.96+.12*sin(tm*(.62+seed*.42)+seed*53.);
+        float wave=pow(.5+.5*cos(length(pos)*14.-tm*3.),9.);
+        float flow=pow(.5+.5*cos(dot(pos,vec3(9.7,-4.2,2.1))-tm*1.25+layer*1.2),20.);
+        lit=tint*fog*lamp*flash*(1.+flow*.16+gain*(.22+.72*wave)+beat*.38);
+        if(layer>2.5)lit*=1.16;
+        gl_PointSize=clamp(size*px*depth*(.95+.035*gain),1.,16.);
+        vSeed=seed;
+      }`;
+    const frag = `precision mediump float;varying vec3 lit;varying float vSeed;uniform float sparks;
+      void main(){float k=1.;if(sparks>.5){vec2 v=gl_PointCoord*2.-1.;float d=dot(v,v);if(d>1.)discard;k=exp(-3.65*d)*(1.-smoothstep(.58,1.,d))*.99;}gl_FragColor=vec4(lit*k,1.);}`;
+    const quad = `attribute vec2 pos;varying vec2 uv;void main(){uv=pos*.5+.5;gl_Position=vec4(pos,0.,1.);}`;
+    const shrink = `precision mediump float;varying vec2 uv;uniform sampler2D tex;uniform vec2 dx;
+      void main(){vec3 c=texture2D(tex,uv).rgb*.20;
+        c+=(texture2D(tex,uv+dx*vec2(-.39,-.39)).rgb+texture2D(tex,uv+dx*vec2(.39,-.39)).rgb+texture2D(tex,uv+dx*vec2(-.39,.39)).rgb+texture2D(tex,uv+dx*vec2(.39,.39)).rgb)*.20;gl_FragColor=vec4(c,1.);}`;
+    const blur = `precision mediump float;varying vec2 uv;uniform sampler2D tex;uniform vec2 dx;
+      void main(){vec3 v=texture2D(tex,uv).rgb*.227027;v+=(texture2D(tex,uv+1.384615*dx).rgb+texture2D(tex,uv-1.384615*dx).rgb)*.316216;v+=(texture2D(tex,uv+3.230769*dx).rgb+texture2D(tex,uv-3.230769*dx).rgb)*.070270;gl_FragColor=vec4(v,1.);}`;
+    const compose = `precision highp float;varying vec2 uv;uniform sampler2D image,nearGlow,farGlow;uniform vec2 fit;uniform float gain;
+      void main(){vec2 xy=(uv-.5)*2./fit;float r2=dot(xy,xy);vec3 s=texture2D(image,uv).rgb,n=texture2D(nearGlow,uv).rgb,w=texture2D(farGlow,uv).rgb;
+        vec3 v=s*.99+n*1.24+w*.95;
+        vec3 c=(v*(1.63+.28*v))/(1.+1.21*v);
+        float room=exp(-r2*.88),lens=exp(-r2*17.)*(1.-.78*exp(-r2*280.));
+        c+=vec3(.0065,.0102,.0148)+vec3(.013,.011,.008)*room+vec3(.063,.028,.004)*lens*(1.+.37*gain);
+        float grain=fract(52.9829189*fract(dot(gl_FragCoord.xy,vec2(.06711056,.00583715))))-.5;
+        gl_FragColor=vec4(clamp(c+grain*.0032,0.,1.),1.);}`;
+    function program(v, f) {
+      function sh(kind, src) {
+        let s = gl.createShader(kind);
+        gl.shaderSource(s, src);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(s));
+        return s;
+      }
+      let p = gl.createProgram(),
+        vs = sh(gl.VERTEX_SHADER, v),
+        fs = sh(gl.FRAGMENT_SHADER, f);
+      gl.attachShader(p, vs);
+      gl.attachShader(p, fs);
+      gl.linkProgram(p);
+      if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(p));
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+      return p;
+    }
+    function places(p, as, us) {
+      let t = { p };
+      for (const n of as) t[n] = gl.getAttribLocation(p, n);
+      for (const n of us) t[n] = gl.getUniformLocation(p, n);
+      return t;
+    }
+    let scene = places(
+      program(vert, frag),
+      ["pos", "tint", "size", "seed", "layer"],
+      ["fit", "turn[0]", "gain", "beat", "tm", "px", "sparks"]
+    );
+    let down = places(program(quad, shrink), ["pos"], ["tex", "dx"]),
+      soft = places(program(quad, blur), ["pos"], ["tex", "dx"]),
+      fin = places(program(quad, compose), ["pos"], ["image", "nearGlow", "farGlow", "fit", "gain"]);
+    const makeBuffer = (a) => {
+      let b = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, b);
+      gl.bufferData(gl.ARRAY_BUFFER, a, gl.STATIC_DRAW);
+      return b;
+    };
+    const bufs = Object.fromEntries(names.map((n) => [n, makeBuffer(atlas[n])]));
+    const qbuf = makeBuffer(new Float32Array([-1, -1, 3, -1, -1, 3]));
+    let targets = [];
+    function target(w, h) {
+      let t = gl.createTexture(),
+        f = gl.createFramebuffer();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      for (const [key, val] of [
+        [gl.TEXTURE_MIN_FILTER, gl.LINEAR],
+        [gl.TEXTURE_MAG_FILTER, gl.LINEAR],
+        [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE],
+        [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE],
+      ])
+        gl.texParameteri(gl.TEXTURE_2D, key, val);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
+        throw Error("Incomplete optical buffer");
+      return { t, f, w, h };
+    }
+    changeSize = () => {
+      for (let t of targets) {
+        gl.deleteTexture(t.t);
+        gl.deleteFramebuffer(t.f);
+      }
+      const w = canvas.width,
+        h = canvas.height,
+        small = (n) => [Math.max(2, Math.round(w / n)), Math.max(2, Math.round(h / n))];
+      targets = [
+        target(w, h),
+        target(...small(3)),
+        target(...small(3)),
+        target(...small(9)),
+        target(...small(9)),
+      ];
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    };
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.CULL_FACE);
+    gl.disable(gl.DITHER);
+    gl.clearColor(0, 0, 0, 1);
+    const tex = (u, t) => {
+      gl.activeTexture(gl.TEXTURE0 + u);
+      gl.bindTexture(gl.TEXTURE_2D, t.t);
+    };
+    function prep(p, out) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, out ? out.f : null);
+      gl.viewport(0, 0, out ? out.w : canvas.width, out ? out.h : canvas.height);
+      gl.useProgram(p.p);
+      gl.bindBuffer(gl.ARRAY_BUFFER, qbuf);
+      gl.enableVertexAttribArray(p.pos);
+      gl.vertexAttribPointer(p.pos, 2, gl.FLOAT, false, 0, 0);
+    }
+    function pass(p, src, out, x, y) {
+      prep(p, out);
+      tex(0, src);
+      gl.uniform1i(p.tex, 0);
+      gl.uniform2f(p.dx, x, y);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.disableVertexAttribArray(p.pos);
+    }
+    drawGL = (mats) => {
+      let [s, a, b, c, d] = targets;
+      let fx = (2 * rad * zoom) / W,
+        fy = (2 * rad * zoom) / H;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, s.f);
+      gl.viewport(0, 0, s.w, s.h);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.useProgram(scene.p);
+      gl.uniformMatrix3fv(scene["turn[0]"], false, new Float32Array(mats.flat()));
+      gl.uniform2f(scene.fit, fx, fy);
+      gl.uniform1f(scene.tm, clock);
+      gl.uniform1f(scene.px, dpr * clamp(Math.sqrt(rad / 305), 0.69, 1.55) * zoom);
+      gl.uniform1f(scene.gain, energy);
+      gl.uniform1f(scene.beat, kick);
+      const attrs = [
+        [scene.pos, 3, 0],
+        [scene.tint, 3, 12],
+        [scene.size, 1, 24],
+        [scene.seed, 1, 28],
+        [scene.layer, 1, 32],
+      ];
+      for (let n of names) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, bufs[n]);
+        for (let [loc, num, off] of attrs) {
+          gl.enableVertexAttribArray(loc);
+          gl.vertexAttribPointer(loc, num, gl.FLOAT, false, 36, off);
+        }
+        gl.uniform1f(scene.sparks, n === "spark" ? 1 : 0);
+        gl.drawArrays(
+          n === "line" ? gl.LINES : n === "spark" ? gl.POINTS : gl.TRIANGLES,
+          0,
+          atlas[n].length / 9
+        );
+      }
+      for (let [loc] of attrs) gl.disableVertexAttribArray(loc);
+      gl.disable(gl.BLEND);
+      pass(down, s, a, 1 / a.w, 1 / a.h);
+      pass(soft, a, b, 1.32 / a.w, 0);
+      pass(soft, b, a, 0, 1.32 / a.h);
+      pass(down, a, c, 1 / c.w, 1 / c.h);
+      pass(soft, c, d, 1.95 / c.w, 0);
+      pass(soft, d, c, 0, 1.95 / c.h);
+      prep(fin, null);
+      tex(0, s);
+      tex(1, a);
+      tex(2, c);
+      gl.uniform1i(fin.image, 0);
+      gl.uniform1i(fin.nearGlow, 1);
+      gl.uniform1i(fin.farGlow, 2);
+      gl.uniform2f(fin.fit, fx, fy);
+      gl.uniform1f(fin.gain, energy);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.disableVertexAttribArray(fin.pos);
+    };
+  }
+  function fallback() {
+    if (gl) {
+      let repl = canvas.cloneNode(false);
+      canvas.replaceWith(repl);
+      canvas = repl;
+    }
+    gl = null;
+    drawGL = null;
+    changeSize = null;
+    ctx = canvas.getContext("2d", { alpha: false });
+    glowCanvas = document.createElement("canvas");
+    glowCtx = glowCanvas.getContext("2d", { alpha: false });
+    resize();
+  }
+  function drawCPU(mats) {
+    if (!ctx) return;
+    const c = ctx,
+      r = rad * zoom;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.globalCompositeOperation = "source-over";
+    c.fillStyle = "#020305";
+    c.fillRect(0, 0, W, H);
+    let a = c.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, r * 1.18);
+    a.addColorStop(0, "#1a1008");
+    a.addColorStop(0.25, "#0e0b08");
+    a.addColorStop(0.87, "#070809");
+    a.addColorStop(1, "#020305");
+    c.fillStyle = a;
+    c.fillRect(0, 0, W, H);
+    c.globalCompositeOperation = "lighter";
+    function project(buf, i) {
+      let m = mats[buf[i + 8] | 0],
+        x = buf[i],
+        y = buf[i + 1],
+        z = buf[i + 2],
+        zz = m[2] * x + m[5] * y + m[8] * z,
+        k = (r * 3.9) / (3.9 - zz);
+      return [
+        W * 0.5 + (m[0] * x + m[3] * y + m[6] * z) * k * 1.042,
+        H * 0.5 - (m[1] * x + m[4] * y + m[7] * z) * k * 0.986,
+        zz,
+      ];
+    }
+    let faces = Array.from({ length: 10 }, () => new Path2D()),
+      f = atlas.foil;
+    for (let i = 0; i < f.length; i += lean ? 54 : 27) {
+      let a = project(f, i),
+        b = project(f, i + 9),
+        d = project(f, i + 18),
+        v = clamp((f[i + 3] + f[i + 12] + f[i + 21]) * 0.33 * (0.85 + a[2] * 0.48), 0, 1.49);
+      if (v < 0.018) continue;
+      let path = faces[Math.min(9, Math.floor(v * 6.5))];
+      path.moveTo(a[0], a[1]);
+      path.lineTo(b[0], b[1]);
+      path.lineTo(d[0], d[1]);
+      path.closePath();
+    }
+    for (let i = 0; i < 10; i++) {
+      let v = (i + 0.5) / 10;
+      c.fillStyle = `rgba(255,${Math.round(113 + v * 86)},${Math.round(19 + v * v * 77)},${0.025 + v * 0.91})`;
+      c.fill(faces[i]);
+    }
+    let bins = Array.from({ length: 15 }, () => new Path2D()),
+      p = atlas.line,
+      step = lean ? 36 : 18;
+    for (let i = 0; i < p.length; i += step) {
+      let a = project(p, i),
+        b = project(p, i + 9),
+        v = clamp(p[i + 3] * (0.82 + a[2] * 0.53) * (1.21 + energy * 0.36), 0, 1.39),
+        id = Math.min(14, Math.floor(v * 10));
+      let path = bins[id];
+      path.moveTo(a[0], a[1]);
+      path.lineTo(b[0], b[1]);
+    }
+    c.lineCap = "round";
+    c.lineWidth = clamp(r / 315, 0.76, 1.4);
+    for (let i = 0; i < 15; i++) {
+      let v = (i + 0.5) / 14;
+      c.strokeStyle = `rgba(255,${Math.round(103 + v * 91)},${Math.round(13 + v ** 2 * 86)},${0.12 + v * 0.87})`;
+      c.stroke(bins[i]);
+    }
+    let dots = Array.from({ length: 8 }, () => new Path2D());
+    p = atlas.spark;
+    for (let i = 0; i < p.length; i += lean ? 18 : 9) {
+      let a = project(p, i),
+        rr = clamp(p[i + 6] * 0.355 * Math.sqrt(r / 300), 0.4, 2.28),
+        v = clamp(p[i + 3] * (0.8 + a[2] * 0.5) * (1.12 + energy * 0.3), 0, 1.49),
+        pa = dots[Math.min(7, Math.floor(v * 5.4))];
+      pa.moveTo(a[0] + rr, a[1]);
+      pa.arc(a[0], a[1], rr, 0, Math.PI * 2);
+    }
+    for (let i = 0; i < 8; i++) {
+      let v = (i + 0.6) / 8;
+      c.fillStyle = `rgba(255,${Math.round(113 + v * 95)},${Math.round(18 + v * 89)},${0.13 + 0.86 * v})`;
+      c.fill(dots[i]);
+    }
+    // Diffuse highlights at quarter resolution; the original strokes stay sharp.
+    if (glowCtx) {
+      let gw = Math.max(1, Math.round(W / 5)),
+        gh = Math.max(1, Math.round(H / 5));
+      if (glowCanvas.width !== gw || glowCanvas.height !== gh) {
+        glowCanvas.width = gw;
+        glowCanvas.height = gh;
+      }
+      glowCtx.globalCompositeOperation = "copy";
+      glowCtx.filter = "blur(1.2px)";
+      glowCtx.drawImage(canvas, 0, 0, gw, gh);
+      c.globalAlpha = 0.96;
+      c.drawImage(glowCanvas, 0, 0, W, H);
+      c.globalAlpha = 1;
+    }
+  }
+  function resize() {
+    W = Math.max(1, Math.round(canvas.clientWidth || innerWidth));
+    H = Math.max(1, Math.round(canvas.clientHeight || innerHeight));
+    dpr = Math.min(
+      Math.max(1.28, devicePixelRatio || 1),
+      gl ? 1.85 : 1.35,
+      Math.sqrt((lean ? 1570000 : 3100000) / (W * H))
+    );
+    let w = Math.max(2, Math.round(W * dpr)),
+      h = Math.max(2, Math.round(H * dpr));
+    rad = Math.min(W * 0.42, H * 0.425);
+    if (canvas.width !== w || canvas.height !== h || !dirty) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    if (changeSize) changeSize();
+    dirty = true;
+  }
+  try {
+    gl = canvas.getContext("webgl", {
+      alpha: false,
+      antialias: false,
+      depth: false,
+      stencil: false,
+      preserveDrawingBuffer: false,
+      powerPreference: "low-power",
+    });
+    if (!gl) fallback();
+    else {
+      initGL();
+      resize();
+    }
+  } catch (err) {
+    console.warn("Using the light renderer:", err.message);
+    fallback();
+  }
+  canvas.addEventListener("webglcontextlost", (e) => {
+    e.preventDefault();
+    lost = true;
+  });
+  canvas.addEventListener("webglcontextrestored", () => {
+    try {
+      initGL();
+      resize();
+    } catch (_) {
+      fallback();
+    }
+    lost = false;
+    dirty = true;
+    schedule();
+  });
+  const force = () => {
+    dirty = true;
+    schedule();
+  };
+  if (window.ResizeObserver) {
+    let ro = new ResizeObserver(() => {
+      resize();
+      force();
+    });
+    ro.observe(canvas);
+  } else
+    window.addEventListener("resize", () => {
+      resize();
+      force();
+    });
+  reduced.addEventListener?.("change", force);
+  function schedule() {
+    if (!raf && !document.hidden) raf = requestAnimationFrame(frame);
+  }
+  function frame(now) {
+    raf = 0;
+    if (document.hidden || lost) return;
+    let active = !reduced.matches && auto,
+      anim =
+        active ||
+        mode !== "idle" ||
+        kick > 0.011 ||
+        dirty ||
+        Math.abs(yawGoal - yaw) + Math.abs(pitchGoal - pitch) + Math.abs(zoomGoal - zoom) > 0.0005;
+    const interval = gl ? (lean ? 1000 / 34 : 1000 / 48) : 1000 / 22;
+    if (anim && (dirty || now - lastDraw >= interval - 1)) {
+      let dt = last < 0 ? 0.025 : Math.min(0.095, (now - last) / 1000);
+      last = now;
+      lastDraw = now;
+      const target = { idle: 0, listening: 0.72, thinking: 1.04, speaking: 0.91, error: 0.17 }[mode] || 0;
+      let damp = 1 - Math.exp(-dt * 7);
+      energy += (target - energy) * damp;
+      kick *= Math.exp(-dt * 3.3);
+      pitch += (pitchGoal - pitch) * damp;
+      yaw += (yawGoal - yaw) * damp;
+      zoom += (zoomGoal - zoom) * damp;
+      if (active && !held) {
+        angle += dt * 0.073 * speed * (mode === "thinking" ? 1.6 : 1);
+      }
+      if (active || (!reduced.matches && mode !== "idle")) clock += dt * (mode === "thinking" ? 2.1 : 1);
+      let m = frames();
+      if (drawGL) drawGL(m);
+      else drawCPU(m);
+      dirty = false;
+    }
+    if (anim || energy > 0.015) {
+      if (!anim && energy > 0.015) dirty = true;
+      schedule();
+    } else last = -1;
+  }
+  document.addEventListener("visibilitychange", () => {
+    last = -1;
+    if (document.hidden) {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+    } else force();
+  });
+  schedule();
+  return {
+    state(s) {
+      mode = s;
+      force();
+    },
+    pulse(v = 0.55) {
+      kick = Math.max(kick, v);
+      force();
+    },
+    drag(dx, dy) {
+      yawGoal += dx * 0.006;
+      pitchGoal = clamp(pitchGoal + dy * 0.005, -1.43, 1.43);
+      force();
+    },
+    hold(v) {
+      held = v;
+    },
+    togglePause() {
+      auto = !auto;
+      force();
+    },
+    command(c) {
+      if (c === "pause") auto = false;
+      if (c === "resume") auto = true;
+      if (c === "faster") speed = clamp(speed * 1.65, 0.25, 4);
+      if (c === "slower") speed = clamp(speed / 1.65, 0.25, 4);
+      if (c === "closer") zoomGoal = clamp(zoomGoal + 0.14, 0.72, 1.17);
+      if (c === "away") zoomGoal = clamp(zoomGoal - 0.14, 0.72, 1.17);
+      if (c === "reset") {
+        speed = 1;
+        yawGoal = 0;
+        pitchGoal = 0;
+        zoomGoal = 1;
+        angle = 0;
+        auto = true;
+      }
+      force();
+    },
+  };
+}
+/* Gestures + one-utterance audio. No startup microphone, no background listener.
+   The only typing surface is explicitly opened by the T shortcut. It is never
+   displayed; it exists for users without speech recognition or a microphone. */
+(() => {
+  const stage = makeStage(document.getElementById("core")),
+    core = document.getElementById("core"),
+    live = document.getElementById("status"),
+    field = document.getElementById("command");
+  const $ = (s) => document.querySelector(s),
+    portable = $('meta[name="jarvis-host"]').content !== "http";
+  let transport = portable ? "portable" : "http",
+    origin = "",
+    gate = { ownerRequired: false, authorized: true, hasLogin: false, signedIn: false };
+  let locale = "hi-IN";
+  try {
+    locale = sessionStorage.getItem("amber:language") === "en-IN" ? "en-IN" : "hi-IN";
+  } catch (_) {}
+  const words = (en, hi) => (locale.startsWith("hi") ? hi : en),
+    announce = (t) => {
+      live.textContent = t;
+    };
+  let phase = "idle",
+    ticket = 0,
+    rec = null,
+    request = null,
+    tts = null,
+    timer = null,
+    recordLimit = 0,
+    speechLimit = 0,
+    typed = false,
+    follow = "",
+    past = [],
+    bridge = null,
+    waitId = 0;
+  const id = () =>
+    globalThis.crypto?.randomUUID?.() || Date.now().toString(36) + Math.random().toString(36).slice(2);
+  function state(s) {
+    phase = s;
+    stage.state(s);
+    document.documentElement.dataset.state = s;
+  }
+  const synth = window.speechSynthesis;
+  function endRecording() {
+    if (!rec) return;
+    const r = rec;
+    rec = null;
+    r.onend = r.onerror = r.onresult = null;
+    try {
+      r.abort();
+    } catch (_) {}
+  }
+  function finishField() {
+    typed = false;
+    field.value = "";
+    field.disabled = true;
+    if (document.activeElement === field) field.blur();
+  }
+  function cancel() {
+    ticket++;
+    clearTimeout(recordLimit);
+    clearTimeout(speechLimit);
+    clearTimeout(waitId);
+    endRecording();
+    if (request) {
+      request.abort();
+      request = null;
+    }
+    if (bridge) {
+      bridge.reject(Error("cancel"));
+      bridge = null;
+    }
+    tts = null;
+    try {
+      synth?.cancel();
+    } catch (_) {}
+    finishField();
+    follow = "";
+    state("idle");
+  }
+  function speak(text, lang = locale, token = ticket) {
+    if (token !== ticket || !text) return;
+    announce(text);
+    if (!synth || !window.SpeechSynthesisUtterance) {
+      state("idle");
+      stage.pulse(0.65);
+      return;
+    }
+    clearTimeout(speechLimit);
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    tts = u;
+    u.lang = lang;
+    let vs = synth.getVoices();
+    let similar = vs.filter((v) => v.lang.toLowerCase().split(/[-_]/)[0] === lang.split("-")[0]);
+    u.voice =
+      similar.find((v) => v.localService && v.lang.toLowerCase() === lang.toLowerCase()) ||
+      similar.find((v) => v.localService) ||
+      similar.find((v) => v.lang.toLowerCase() === lang.toLowerCase()) ||
+      similar[0] ||
+      null;
+    u.rate = 1.015;
+    u.pitch = 0.94;
+    u.volume = 0.92;
+    state("speaking");
+    stage.pulse(0.45);
+    const done = () => {
+      if (token !== ticket || tts !== u) return;
+      clearTimeout(speechLimit);
+      tts = null;
+      state("idle");
+    };
+    u.onend = u.onerror = done;
+    u.onboundary = () => {
+      if (token === ticket) stage.pulse(0.28);
+    };
+    speechLimit = setTimeout(
+      () => {
+        if (tts === u && token === ticket) {
+          synth.cancel();
+          done();
+        }
+      },
+      Math.min(85000, Math.max(7000, text.length * 125 + 4000))
+    );
+    try {
+      synth.speak(u);
+    } catch (_) {
+      done();
+    }
+  }
+  function useLanguage(l, notify = true) {
+    locale = l;
+    try {
+      sessionStorage.setItem("amber:language", l);
+    } catch (_) {}
+    document.documentElement.lang = l;
+    if (notify) speak(words("English voice is ready.", "हिंदी आवाज़ तैयार है।"));
+  }
+  useLanguage(locale, false);
+  const send = (type, props = {}, target = origin || "*") =>
+    window.parent.postMessage({ isStreamlitMessage: true, type: "streamlit:" + type, ...props }, target);
+  const inComponent = window.parent !== window && /\/component\//.test(location.pathname);
+  if (inComponent) {
+    window.addEventListener("message", (e) => {
+      if (
+        e.source !== window.parent ||
+        e.data?.type !== "streamlit:render" ||
+        e.data?.args?.contract !== "amber.v1" ||
+        (origin && e.origin !== origin)
+      )
+        return;
+      origin = e.origin;
+      transport = "component";
+      const args = e.data.args;
+      gate = args.access || gate;
+      const r = args.result;
+      if (bridge && r?.id === bridge.id) {
+        let b = bridge;
+        bridge = null;
+        clearTimeout(waitId);
+        b.resolve(r);
+      }
+    });
+    send("componentReady", { apiVersion: 1 });
+    send("setFrameHeight", { height: Math.max(450, innerHeight) });
+  }
+  function owner() {
+    if (transport !== "component" || !gate.ownerRequired) {
+      speak(
+        words(
+          "This session uses public skills. Owner sign-in is available on a configured private deployment.",
+          "यहाँ सार्वजनिक जानकारी उपलब्ध है। निजी डिप्लॉयमेंट में मालिक का साइन इन जोड़ सकते हैं।"
+        )
+      );
+      return;
+    }
+    if (!gate.hasLogin) {
+      speak(
+        words(
+          "Owner access is locked. Configure sign-in on the server.",
+          "मालिक का एक्सेस बंद है। सर्वर पर साइन इन सेट कीजिए।"
+        )
+      );
+      return;
+    }
+    send("setComponentValue", {
+      dataType: "json",
+      value: { id: id(), kind: gate.signedIn ? "logout" : "login" },
+    });
+  }
+  function permitted() {
+    if (transport === "component" && gate.ownerRequired && !gate.authorized) {
+      if (gate.signedIn)
+        speak(
+          words(
+            "This is not the owner account. Press O to sign out.",
+            "यह मालिक का खाता नहीं है। साइन आउट के लिए ओ दबाइए।"
+          )
+        );
+      else owner();
+      return false;
+    }
+    return true;
+  }
+  function api(q, tok) {
+    const command = {
+      kind: "command",
+      id: id(),
+      query: q,
+      lang: locale,
+      zone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      pending: follow,
+      history: past.slice(-4),
+    };
+    follow = "";
+    if (transport === "component")
+      return new Promise((resolve, reject) => {
+        bridge = { id: command.id, resolve, reject };
+        send("setComponentValue", { dataType: "json", value: command });
+        waitId = setTimeout(() => {
+          if (bridge?.id === command.id) {
+            bridge = null;
+            reject(Error("timeout"));
+          }
+        }, 30000);
+      });
+    if (transport === "http") {
+      request = new AbortController();
+      const signal = request.signal;
+      waitId = setTimeout(() => {
+        if (tok === ticket) request?.abort();
+      }, 28000);
+      return fetch(new URL("api/command", location.href), {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(command),
+        signal,
+      })
+        .then(async (r) => {
+          if (!r.ok && r.status !== 429) throw Error("lookup");
+          return r.json();
+        })
+        .finally(() => {
+          if (tok === ticket) {
+            clearTimeout(waitId);
+            request = null;
+          }
+        });
+    }
+    // A downloaded single-file preview has no network backend. Never invent a
+    // weather report, or silently send a question to another site.
+    const zlist = [
+      ["Tokyo|टोक्यो|टोकियो", "Asia/Tokyo"],
+      ["Delhi|Mumbai|दिल्ली|मुंबई", "Asia/Kolkata"],
+      ["London|लंदन", "Europe/London"],
+      ["Paris|पेरिस", "Europe/Paris"],
+      ["New York|न्यूयॉर्क", "America/New_York"],
+      ["Dubai|दुबई", "Asia/Dubai"],
+      ["Sydney|सिडनी", "Australia/Sydney"],
+    ];
+    if (/(?:\btime\b|clock|baje|samay|समय|बजे|टाइम)/i.test(q)) {
+      let hit = zlist.find((x) => new RegExp(x[0], "i").test(q));
+      if (
+        hit ||
+        /^(?:(?:what(?:'s| is) |tell me )?(?:the |my |local )*time(?: is it)?|(?:अभी )?(?:समय|कितने बजे)(?: क्या)?(?: है| हैं)?)\??$/i.test(
+          q.trim()
+        )
+      ) {
+        let zone = hit ? hit[1] : command.zone;
+        return Promise.resolve({
+          lang: locale,
+          source: "local",
+          text:
+            new Intl.DateTimeFormat(locale, { timeZone: zone, hour: "numeric", minute: "2-digit" }).format(
+              new Date()
+            ) +
+            " — " +
+            zone.split("/").pop().replaceAll("_", " "),
+        });
+      }
+    }
+    return Promise.resolve({
+      lang: locale,
+      source: "local",
+      text: words(
+        "This file is the offline hologram. Open the live preview or start the Python launcher for world lookups.",
+        "यह ऑफ़लाइन होलोग्राम है। दुनिया की जानकारी पूछने के लिए लाइव प्रीव्यू या पाइथन लॉन्चर खोलिए।"
+      ),
+    });
+  }
+  const deDigit = (s) => s.replace(/[०-९]/g, (n) => String(n.charCodeAt(0) - 2406));
+  function local(q) {
+    if (/^(?:speak (?:in )?english|english (?:mode|please)|इंग्लिश(?: मोड)?|अंग्रेज़ी में बोलो)$/i.test(q)) {
+      useLanguage("en-IN");
+      return true;
+    }
+    if (/^(?:speak (?:in )?hindi|hindi (?:mode|please)|हिंदी(?: मोड| में बोलो)?|हिन्दी में बोलो)$/i.test(q)) {
+      useLanguage("hi-IN");
+      return true;
+    }
+    if (/^(?:help|commands|madad|मदद|मदद करो|क्या कर सकते हो|what can you do|hello|hi|नमस्ते|हेलो)$/i.test(q)) {
+      speak(
+        words(
+          "At your service. Try: time in Tokyo, weather in Delhi, world headlines, or set a timer for one minute. Tap once for each command.",
+          "मैं तैयार हूँ। बोलिए, टोक्यो में कितने बजे हैं, दिल्ली का मौसम बताओ, दुनिया की खबरें सुनाओ, या एक मिनट का टाइमर लगाओ। हर आदेश के लिए एक बार टैप कीजिए।"
+        )
+      );
+      return true;
+    }
+    if (
+      /^(?:cancel (?:the |my )?timer|stop (?:the |my )?timer|timer (?:hatao|band karo|cancel karo)|टाइमर (?:हटाओ|बंद करो|कैंसल करो|रद्द करो))$/i.test(
+        q
+      )
+    ) {
+      let had = timer !== null;
+      clearTimeout(timer);
+      timer = null;
+      speak(
+        had
+          ? words("Timer cancelled.", "टाइमर रद्द कर दिया।")
+          : words("There is no active timer.", "कोई टाइमर नहीं चल रहा।")
+      );
+      return true;
+    }
+    if (/(?:\btimer\b|टाइमर)/i.test(q)) {
+      let str = deDigit(q);
+      for (let [pat, val] of [
+        ["one|a|ek|एक", 1],
+        ["two|do|दो", 2],
+        ["three|teen|तीन", 3],
+        ["five|paanch|panch|पाँच|पांच", 5],
+        ["ten|das|दस", 10],
+        ["fifteen|पंद्रह", 15],
+        ["thirty|तीस", 30],
+      ])
+        str = str.replace(
+          new RegExp("(^|\\s)(" + pat + ")(?=\\s+(?:second|minute|hour|सेकंड|सेकेंड|मिनट|घंट))", "ig"),
+          "$1" + val
+        );
+      let hit = str.match(
+          /(\d+(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|सेकंड|सेकेंड|मिनट|घंटे|घंटा|घंटों)/i
+        ),
+        n = hit && Number(hit[1]),
+        unit = hit && (/^(?:s|से)/i.test(hit[2]) ? "second" : /^(?:m|मि)/i.test(hit[2]) ? "minute" : "hour"),
+        ms = n * (unit === "hour" ? 3600000 : unit === "minute" ? 60000 : 1000);
+      if (!hit || ms < 1000 || ms > 86400000) {
+        speak(
+          words(
+            "Say a duration between one second and twenty-four hours.",
+            "एक सेकंड से चौबीस घंटे के बीच की अवधि बताइए।"
+          )
+        );
+        return true;
+      }
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        cancel();
+        speak(words("Your timer is complete.", "आपका टाइमर पूरा हो गया।"));
+      }, ms);
+      speak(
+        words(
+          `${n} ${unit}${n === 1 ? "" : "s"}. Timer set.`,
+          `${n} ${unit === "second" ? "सेकंड" : unit === "minute" ? "मिनट" : "घंटे"} का टाइमर लगा दिया।`
+        )
+      );
+      return true;
+    }
+    const moves = [
+      [
+        "pause",
+        /^(?:pause|pause (?:the )?(?:hologram|rotation)|stop (?:spinning|rotation)|rotation roko|ghumna band karo|घूमना (?:रोको|बंद करो)|होलोग्राम रोको)$/,
+        "Rotation paused.",
+        "घूमना रोक दिया।",
+      ],
+      [
+        "resume",
+        /^(?:resume(?: rotation)?|start (?:spinning|rotation)|phir (?:ghumo|ghumao)|फिर (?:घूमो|घुमाओ)|घूमना शुरू करो)$/,
+        "Rotation resumed.",
+        "फिर से घूम रहा हूँ।",
+      ],
+      [
+        "faster",
+        /^(?:(?:rotate |spin )?faster|tez (?:ghumo|ghumao)|ते[ज़ज]+ (?:घूमो|घुमाओ))$/,
+        "Rotating faster.",
+        "रफ़्तार बढ़ा दी।",
+      ],
+      [
+        "slower",
+        /^(?:(?:rotate |spin )?slower|dheere (?:ghumo|ghumao)|धीरे (?:घूमो|घुमाओ))$/,
+        "Rotating slower.",
+        "रफ़्तार कम कर दी।",
+      ],
+      ["closer", /^(?:zoom in|come closer|paas aao|पास आओ|ज़ूम इन|जूम इन)$/, "Moving closer.", "थोड़ा और पास।"],
+      ["away", /^(?:zoom out|move back|door jao|दूर जाओ|ज़ूम आउट|जूम आउट)$/, "Moving back.", "थोड़ा पीछे।"],
+      [
+        "reset",
+        /^(?:reset (?:the )?(?:view|hologram)|view reset karo|रीसेट व्यू)$/,
+        "View restored.",
+        "मूल दृश्य वापस आ गया।",
+      ],
+    ];
+    for (const [action, re, en, hi] of moves)
+      if (re.test(q)) {
+        stage.command(action);
+        speak(words(en, hi));
+        return true;
+      }
+    return false;
+  }
+  async function execute(raw, tok) {
+    if (tok !== ticket) return;
+    endRecording();
+    clearTimeout(recordLimit);
+    let text = raw.trim().slice(0, 360);
+    let q = text
+      .replace(/^(?:(?:hey|okay|ok|हे|ओके)\s+)?(?:jarvis|जार्विस|जारविस|जर्विस)[\s,.:।!-]*/i, "")
+      .replace(/[?!.।]+$/, "")
+      .trim()
+      .toLowerCase();
+    if (!q) {
+      speak(words("Ready. Tap again and give me a command.", "तैयार हूँ। फिर टैप करके आदेश दीजिए।"));
+      return;
+    }
+    if (local(q)) {
+      follow = "";
+      return;
+    }
+    state("thinking");
+    stage.pulse(0.48);
+    announce(words("Looking that up.", "पता कर रहा हूँ।"));
+    try {
+      const result = await api(text, tok);
+      if (tok !== ticket) return;
+      if (!result || typeof result.text !== "string") throw Error("reply");
+      follow = result.follow || "";
+      if (result.source === "OpenRouter") {
+        past.push({ role: "user", content: text }, { role: "assistant", content: result.text.slice(0, 440) });
+        past = past.slice(-4);
+      }
+      speak(result.text, result.lang || locale, tok);
+    } catch (_) {
+      if (tok === ticket)
+        speak(
+          words(
+            "I could not reach the information service. Please try again.",
+            "अभी जानकारी की सेवा तक नहीं पहुँच पाया। फिर कोशिश कीजिए।"
+          ),
+          locale,
+          tok
+        );
+    }
+  }
+  function begin() {
+    if (phase !== "idle") {
+      cancel();
+      return;
+    }
+    if (!permitted()) return;
+    const R = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let tok = ++ticket;
+    if (!R) {
+      speak(
+        words(
+          "Voice recognition is unavailable in this browser. Press T, type a command, and press Enter, or open this page in Chrome or Edge.",
+          "इस ब्राउज़र में आवाज़ पहचान उपलब्ध नहीं है। टी दबाकर आदेश टाइप करें और एंटर दबाएँ, या क्रोम या एज में खोलें।"
+        ),
+        locale,
+        tok
+      );
+      return;
+    }
+    try {
+      let r = new R();
+      rec = r;
+      r.lang = locale;
+      r.interimResults = false;
+      r.continuous = false;
+      r.maxAlternatives = 1;
+      state("listening");
+      stage.pulse(0.66);
+      announce(words("Listening for one command.", "एक आदेश सुन रहा हूँ।"));
+      r.onspeechstart = () => {
+        if (tok === ticket) stage.pulse(0.65);
+      };
+      r.onresult = (e) => {
+        if (tok !== ticket || rec !== r) return;
+        const line = e.results?.[e.resultIndex || 0]?.[0]?.transcript || "";
+        execute(line, tok);
+      };
+      r.onerror = (e) => {
+        if (tok !== ticket || rec !== r) return;
+        clearTimeout(recordLimit);
+        endRecording();
+        let m =
+          e.error === "not-allowed" || e.error === "service-not-allowed"
+            ? words(
+                "The microphone is blocked. Allow it in the browser, open the preview in its own tab, or press T to type.",
+                "माइक की अनुमति नहीं मिली। ब्राउज़र में अनुमति दें, प्रीव्यू अलग टैब में खोलें, या टी दबाकर टाइप करें।"
+              )
+            : e.error === "audio-capture"
+              ? words(
+                  "No microphone was found. Press T to type a command.",
+                  "माइक नहीं मिला। टी दबाकर आदेश टाइप करें।"
+                )
+              : e.error === "network"
+                ? words(
+                    "The speech service is unreachable. Press T to type a command.",
+                    "आवाज़ पहचान की सेवा उपलब्ध नहीं है। टी दबाकर आदेश टाइप करें।"
+                  )
+                : words("I did not hear a command. Tap to try again.", "आदेश सुनाई नहीं दिया। फिर टैप कीजिए।");
+        speak(m, locale, tok);
+      };
+      r.onend = () => {
+        if (tok === ticket && rec === r) {
+          rec = null;
+          clearTimeout(recordLimit);
+          state("idle");
+          announce(words("Microphone off.", "माइक बंद है।"));
+        }
+      };
+      recordLimit = setTimeout(() => {
+        if (tok === ticket && rec === r) {
+          endRecording();
+          state("idle");
+          announce(words("Microphone off.", "माइक बंद है।"));
+        }
+      }, 15000);
+      r.start();
+    } catch (_) {
+      endRecording();
+      clearTimeout(recordLimit);
+      speak(
+        words(
+          "Voice input did not start. Press T to type a command.",
+          "आवाज़ पहचान शुरू नहीं हुई। टी दबाकर टाइप करें।"
+        ),
+        locale,
+        tok
+      );
+    }
+  }
+  function startTyping() {
+    if (typed) return;
+    if (phase !== "idle") cancel();
+    if (!permitted()) return;
+    ticket++;
+    typed = true;
+    field.value = "";
+    field.disabled = false;
+    state("listening");
+    field.focus({ preventScroll: true });
+    announce(
+      words(
+        "Type a command and press Enter. No text is shown.",
+        "आदेश टाइप करें और एंटर दबाएँ। स्क्रीन पर टेक्स्ट नहीं दिखेगा।"
+      )
+    );
+  }
+  field.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.isComposing) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      cancel();
+      core.focus({ preventScroll: true });
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      let text = field.value;
+      finishField();
+      core.focus({ preventScroll: true });
+      if (text.trim()) execute(text, ticket);
+      else state("idle");
+    }
+  });
+  field.addEventListener("blur", () => {
+    if (typed) {
+      finishField();
+      state("idle");
+    }
+  });
+  function full() {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen()?.catch(() => {});
+      else if (document.documentElement.requestFullscreen)
+        document.documentElement
+          .requestFullscreen()
+          .catch(() => announce("Open the live preview in its own tab for full screen."));
+      else announce("Use the browser full-screen control.");
+    } catch (_) {
+      announce("Use the browser full-screen control.");
+    }
+  }
+  let down = null,
+    hide = 0;
+  function cursor() {
+    core.classList.remove("rest");
+    clearTimeout(hide);
+    hide = setTimeout(() => core.classList.add("rest"), 1400);
+  }
+  cursor();
+  core.addEventListener("pointerdown", (e) => {
+    if (!e.isPrimary || e.button !== 0) return;
+    cursor();
+    core.focus({ preventScroll: true });
+    down = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      lx: e.clientX,
+      ly: e.clientY,
+      t: performance.now(),
+      moved: false,
+    };
+    try {
+      core.setPointerCapture(e.pointerId);
+    } catch (_) {}
+    stage.hold(true);
+  });
+  core.addEventListener("pointermove", (e) => {
+    cursor();
+    if (!down || e.pointerId !== down.id) return;
+    let dx = e.clientX - down.lx,
+      dy = e.clientY - down.ly;
+    if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) down.moved = true;
+    if (down.moved) stage.drag(dx, dy);
+    down.lx = e.clientX;
+    down.ly = e.clientY;
+  });
+  core.addEventListener("pointerup", (e) => {
+    if (!down || e.pointerId !== down.id) return;
+    let d = down;
+    down = null;
+    stage.hold(false);
+    if (d.moved) return;
+    const r = core.getBoundingClientRect(),
+      x = e.clientX - r.left - r.width / 2,
+      y = e.clientY - r.top - r.height / 2,
+      rad = Math.min(r.width * 0.42, r.height * 0.425);
+    if (Math.hypot(x / 1.06, y) > rad * 1.08) return;
+    if (performance.now() - d.t >= 650) full();
+    else begin();
+  });
+  core.addEventListener("pointercancel", () => {
+    down = null;
+    stage.hold(false);
+  });
+  core.addEventListener("click", (e) => {
+    if (e.detail === 0) begin();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (typed || e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
+    let k = e.key.toLowerCase();
+    if (k === " " || k === "enter") {
+      e.preventDefault();
+      begin();
+    } else if (k === "escape") {
+      cancel();
+      announce(words("Cancelled.", "रद्द कर दिया।"));
+    } else if (k === "f") full();
+    else if (k === "p") stage.togglePause();
+    else if (k === "t") {
+      e.preventDefault();
+      startTyping();
+    } else if (k === "h" || k === "e") {
+      cancel();
+      useLanguage(k === "h" ? "hi-IN" : "en-IN");
+    } else if (k === "o") {
+      cancel();
+      owner();
+    } else if (k.startsWith("arrow")) {
+      e.preventDefault();
+      stage.drag(
+        k === "arrowright" ? 22 : k === "arrowleft" ? -22 : 0,
+        k === "arrowdown" ? 18 : k === "arrowup" ? -18 : 0
+      );
+    }
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      cancel();
+      past = [];
+    }
+  });
+  window.addEventListener("pagehide", () => {
+    cancel();
+    past = [];
+    clearTimeout(timer);
+    timer = null;
+  });
+  state("idle");
+})();
+
+</script></body></html>
