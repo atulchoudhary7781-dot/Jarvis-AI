@@ -19,7 +19,10 @@ from .skills import MAX_QUERY, RateLimit, answer, reply
 UI = Path(__file__).parent / "ui" / "index.html"
 
 
-def make_server(port=8765, *, preview=False):
+def make_server(port=8765, *, preview=False, desktop=None):
+    if preview and desktop is not None:
+        raise ValueError("Desktop actions are loopback only")
+    public_origin = os.environ.get("JARVIS_PUBLIC_ORIGIN", "").rstrip("/") if preview else ""
     neural = voice.available(os.environ.get("JARVIS_VOICE", "auto"))
     body = (
         UI.read_text(encoding="utf-8")
@@ -38,8 +41,9 @@ def make_server(port=8765, *, preview=False):
     script = body.split(b"<script>", 1)[1].split(b"</script>", 1)[0]
     digest = base64.b64encode(hashlib.sha256(script).digest()).decode()
     csp = f"default-src 'none'; script-src 'sha256-{digest}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; media-src blob: data:; base-uri 'none'; form-action 'none'"
+    csp += "; object-src 'none'"
     if not preview:
-        csp += "; frame-ancestors 'self'"
+        csp += "; frame-ancestors 'none'"
     terms_path = Path(__file__).parent / "licenses" / "gemma-TERMS.txt"
     catalog = Catalog()
     sync_catalog = os.environ.get("JARVIS_COMMUNITY_SYNC", "").strip() == "1"
@@ -84,7 +88,8 @@ def make_server(port=8765, *, preview=False):
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy", csp)
-            self.send_header("Permissions-Policy", "camera=(), geolocation=(), microphone=(self)")
+            self.send_header("Permissions-Policy", "camera=(), geolocation=(), microphone=(self), payment=(), usb=(), serial=()")
+            self.send_header("Cross-Origin-Resource-Policy", "same-origin")
             self.end_headers()
             if self.command != "HEAD":
                 try:
@@ -122,7 +127,16 @@ def make_server(port=8765, *, preview=False):
             if not self.host_ok():
                 return self.out(403, {"error": "Local host only"})
             route = urlsplit(self.path).path
-            if route not in {"/api/command", "/api/voice"}:
+            native = route in {"/api/desktop/approve", "/api/desktop/commit"}
+            if native:
+                if preview or desktop is None:
+                    return self.out(404, {"error": "Not found"})
+                host = f"127.0.0.1:{self.server.server_port}"
+                if (self.client_address[0] != "127.0.0.1" or self.headers.get("Host") != host
+                        or self.headers.get("Origin") != "http://" + host
+                        or not desktop.admits(self.headers.get("X-Jarvis-Session"))):
+                    return self.out(403, {"error": "Local approval required"})
+            elif route not in {"/api/command", "/api/voice"}:
                 return self.out(404, {"error": "Not found"})
             if self.headers.get_content_type() != "application/json":
                 return self.out(415, {"error": "Use JSON"})
@@ -135,18 +149,28 @@ def make_server(port=8765, *, preview=False):
                     ).casefold() and urlsplit(origin).scheme in ("http", "https")
                 except ValueError:
                     same = False
-                if not same and not (preview and site == "same-origin"):
+                if not same and not (public_origin and origin == public_origin):
                     return self.out(403, {"error": "Same origin required"})
-            if site == "cross-site":
+            if site in {"cross-site", "same-site"}:
                 return self.out(403, {"error": "Same origin required"})
+            if self.headers.get("Transfer-Encoding") or len(self.headers.get_all("Content-Length", [])) != 1:
+                return self.out(400, {"error": "One content length required"})
             try:
                 size = int(self.headers.get("Content-Length", "0"))
             except ValueError:
                 return self.out(400, {"error": "Invalid length"})
-            if not 0 < size <= 8500:
+            if not 0 < size <= (384 if native else 8500):
                 return self.out(413, {"error": "Use one short command"})
             try:
                 req = json.loads(self.rfile.read(size))
+                if not isinstance(req, dict):
+                    raise ValueError()
+                if native:
+                    if route.endswith("/approve") and set(req) == {"app"}:
+                        return self.out(200, desktop.approve(req["app"]))
+                    if route.endswith("/commit") and set(req) == {"app", "permit"}:
+                        return self.out(200, desktop.commit(req["app"], req["permit"]))
+                    raise ValueError()
                 if route == "/api/voice":
                     if (
                         not isinstance(req, dict)
@@ -167,7 +191,12 @@ def make_server(port=8765, *, preview=False):
                     not isinstance(q, str)
                     or not 0 < len(q.strip()) <= MAX_QUERY
                     or not isinstance(lang, str)
-                    or not isinstance(history, list)
+                    or lang not in {"hi", "en", "hi-IN", "en-IN", "en-US", "en-GB"}
+                    or not isinstance(history, list) or len(history) > 4
+                    or not all(isinstance(m, dict) and m.get("role") in ("user", "assistant")
+                               and isinstance(m.get("content"), str) and len(m["content"]) <= 440 for m in history)
+                    or not isinstance(req.get("zone", "UTC"), str) or len(req.get("zone", "UTC")) > 85
+                    or req.get("pending", "") not in ("", "weather")
                 ):
                     raise ValueError()
             except (ValueError, TypeError, KeyError, AttributeError, RecursionError):
@@ -200,6 +229,25 @@ def make_server(port=8765, *, preview=False):
     class Host(ThreadingHTTPServer):
         daemon_threads = True
         allow_reuse_address = True
+        # Bound accepted worker threads as well as expensive model work. No queue
+        # of private prompts is retained when the instance is at capacity.
+        workers = threading.BoundedSemaphore(20)
+
+        def process_request(self, request, address):
+            if not self.workers.acquire(blocking=False):
+                self.shutdown_request(request)
+                return
+            try:
+                super().process_request(request, address)
+            except BaseException:
+                self.workers.release()
+                raise
+
+        def process_request_thread(self, request, address):
+            try:
+                super().process_request_thread(request, address)
+            finally:
+                self.workers.release()
 
     host = Host(("0.0.0.0" if preview else "127.0.0.1", port), Handler)
     host.neural_voice = neural

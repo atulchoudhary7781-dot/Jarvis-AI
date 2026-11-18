@@ -162,7 +162,7 @@ FILL = set(
     """
     what what's whats is the it like now current currently tell me a an about at in for of please how
     right can you there today city local here my your get outside degrees today's todays do does are
-    could would much and ka kaa ke ki ko mein mai abhi aaj aj kya hai hain h batao bataiye bata batana
+    yaar zara jara dost bhai do na dena me abhi filhaal फिलहाल ज़रा जरा यार भाई दोस्त ना देना could would much and ka kaa ke ki ko mein mai abhi aaj aj kya hai hain h batao bataiye bata batana
     kitna kitni kitne raha rahi rahe chal jaan na mujhe mera mere yahan yaha wahan dikhao hua hoga
     kaisa kesa kaisi temperature weather time
     का की के को में मैं अभी है हैं क्या आज कितना कितने कितनी मुझे बताओ बताइए बताना बताइये बता दो
@@ -769,7 +769,7 @@ def answer(
             )
         return reply(
             "I could not verify that information right now. Please try again; I will not guess.",
-            "अभी इस जानकारी की पुष्टि नहीं हो पाई। कृपया फिर कोशिश कीजिए।",
+            "अभी पक्की जानकारी नहीं मिली। थोड़ी देर में फिर देख लें?",
             lang,
             source="unavailable",
         )

@@ -89,8 +89,8 @@ class Engine(unittest.TestCase):
         signal = np.r_[np.zeros(960), np.sin(np.arange(4800) * 0.08) * 0.3, np.zeros(960)]
         engine.model.create.return_value = (signal, 24000)
         for lang, name, backend_lang in [
-            ("hi-IN", "hm_omega", "hi"),
-            ("en-IN", "bm_george", "en-gb"),
+            ("hi-IN", "amber_dost_hi", "hi"),
+            ("en-IN", "amber_dost_en", "en-gb"),
         ]:
             out = engine.speak("J.A.R.V.I.S.", lang)
             self.assertTrue(out["ok"])
