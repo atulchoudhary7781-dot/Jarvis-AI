@@ -1,0 +1,16 @@
+/* Browser simulations only: no real mic, network provider or acoustic benchmark. */
+const {chromium}=require('playwright'),assert=require('node:assert/strict');
+(async()=>{const b=await chromium.launch({executablePath:'/usr/bin/chromium',args:['--no-sandbox']});
+async function scenario(mode){const p=await b.newPage({viewport:{width:900,height:650}}), errors=[];p.on('pageerror',e=>errors.push(e.message));
+ await p.addInitScript(mode=>{localStorage.setItem('amber:mic-on-open','off');window.qa={start:0,stops:0,spoken:[]};window.confirm=()=>true;
+ Object.defineProperty(navigator,'mediaDevices',{value:{getUserMedia:async()=>{qa.start=performance.now();return {getTracks:()=>[{stop:()=>qa.stops++}]}}},configurable:true});
+ window.AudioContext=window.webkitAudioContext=class{constructor(){this.state='running';this.currentTime=0;this.destination={}}resume(){return Promise.resolve()}close(){this.state='closed';return Promise.resolve()}createBuffer(){return{}}createBufferSource(){return{connect(){},disconnect(){},start(){this.onended?.()}}}createMediaStreamSource(){return{connect(){}}}createAnalyser(){return{fftSize:1024,getByteTimeDomainData(a){let speaking=mode==='long'||performance.now()-qa.start<850;for(let i=0;i<a.length;i++)a[i]=speaking?(i%2?130:126):128}}}};
+ window.MediaRecorder=class{static isTypeSupported(t){return t.includes('webm')}constructor(s,o){this.state='inactive';this.mimeType=o?.mimeType||'audio/webm'}start(){this.state='recording'}stop(){if(this.state==='inactive')return;this.state='inactive';queueMicrotask(()=>{this.ondataavailable?.({data:new Blob([new Uint8Array(mode==='oversize'?1500001:mode==='empty'?0:200)],{type:this.mimeType})});this.onstop?.()})}};
+ window.SpeechSynthesisUtterance=class{constructor(t){this.text=t}};Object.defineProperty(window,'speechSynthesis',{value:{get speaking(){return false},get pending(){return false},getVoices(){return[]},cancel(){},speak(u){qa.spoken.push(u.text);setTimeout(()=>u.onstart?.(),1);setTimeout(()=>u.onend?.(),20)}}});},mode);
+ let uploads=0;await p.route('**/api/transcribe',async r=>{uploads++;await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,text:'stop listening',language:'english'})})});
+ await p.goto('http://127.0.0.1:8765');await p.locator('#core').click({position:{x:450,y:325}});
+ if(mode==='soft'){await p.waitForFunction(()=>qa.spoken.some(s=>/microphone off|माइक बंद/i.test(s)),null,{timeout:10000});assert.equal(uploads,1);}
+ else if(mode==='empty'){await p.waitForFunction(()=>qa.spoken.some(s=>/no microphone is available|माइक नहीं मिला/i.test(s)),null,{timeout:10000});assert.equal(uploads,0);}
+ else {await p.waitForFunction(()=>qa.spoken.some(s=>/too long|बहुत लंबी/i.test(s)),null,{timeout:24000});assert.equal(uploads,0);}
+ assert.ok(await p.evaluate(()=>qa.stops>0));assert.deepEqual(errors,[]);console.log('PASS',mode,mode==='soft'?'quiet voice captured':mode==='oversize'?'oversized recording gives a clear error without upload':mode==='empty'?'empty recording gives a clear error without upload':'long continuous utterance rejected without upload');await p.close();}
+ await Promise.all([scenario('soft'),scenario('long'),scenario('oversize'),scenario('empty')]);await b.close();})().catch(e=>{console.error(e);process.exit(1)});

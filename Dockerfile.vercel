@@ -4,7 +4,7 @@ WORKDIR /app
 COPY requirements-chat.txt requirements-voice.txt launch_hologram.py vercel_host.py ./
 COPY deploy/prepare_chat.py ./deploy/
 COPY community/skills.json ./community/
-COPY hologram/__init__.py hologram/chat.py hologram/groq_speech.py hologram/catalog.py hologram/voice.py hologram/server.py hologram/skills.py hologram/zones.zip ./hologram/
+COPY hologram/__init__.py hologram/chat.py hologram/groq_speech.py hologram/quota.py hologram/catalog.py hologram/voice.py hologram/server.py hologram/skills.py hologram/zones.zip ./hologram/
 COPY hologram/ui/index.html ./hologram/ui/
 COPY hologram/licenses/ ./hologram/licenses/
 
