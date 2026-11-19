@@ -10,6 +10,8 @@ hologram/*
 !hologram/__init__.py
 !hologram/skills.py
 !hologram/server.py
+!hologram/groq_speech.py
+!hologram/quota.py
 !hologram/voice.py
 !hologram/zones.zip
 !hologram/ui/
