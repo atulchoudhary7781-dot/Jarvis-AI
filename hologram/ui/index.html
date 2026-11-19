@@ -3014,11 +3014,31 @@ const Pilot = (() => {
     };
   }
   // VOICE_GATE_END
+  // AUDIO_FOCUS_BEGIN
+  // Browser echo/noise suppression runs at capture. Remove low-frequency rumble
+  // from both the gate and recording when Web Audio supports it. This is not
+  // speaker identification and cannot remove other people or all noise.
+  function makeFocusedAudio(ac, stream) {
+    const source = ac.createMediaStreamSource(stream);
+    const analyser = ac.createAnalyser(); analyser.fftSize = 1024;
+    if (typeof ac.createBiquadFilter === 'function' && typeof ac.createMediaStreamDestination === 'function') {
+      try {
+        const highpass = ac.createBiquadFilter();
+        highpass.type = 'highpass'; highpass.frequency.value = 100;
+        const destination = ac.createMediaStreamDestination();
+        source.connect(highpass); highpass.connect(analyser); highpass.connect(destination);
+        return {analyser, recordStream: destination.stream};
+      } catch (_) { /* Fall back to the original stream; never claim filtering worked. */ }
+    }
+    source.connect(analyser);
+    return {analyser, recordStream: stream};
+  }
+  // AUDIO_FOCUS_END
   /* Captures one bounded turn; the microphone is released before upload, and
      abort invalidates both capture and network. The app does not save audio to disk. */
   class CloudRecognition {
-    constructor(){this.active=false;this.ended=false;this.stream=null;this.record=null;this.ac=null;this.timer=0;this.fetcher=null;this.chunks=[];}
-    end(){if(this.ended)return;this.ended=true;this.active=false;clearInterval(this.timer);try{this.stream?.getTracks().forEach(t=>t.stop())}catch(_){};try{this.ac?.close()}catch(_){};this.onend?.();}
+    constructor(){this.active=false;this.ended=false;this.stream=null;this.recordStream=null;this.record=null;this.ac=null;this.timer=0;this.fetcher=null;this.chunks=[];}
+    end(){if(this.ended)return;this.ended=true;this.active=false;clearInterval(this.timer);try{this.stream?.getTracks().forEach(t=>t.stop())}catch(_){};try{if(this.recordStream!==this.stream)this.recordStream?.getTracks().forEach(t=>t.stop())}catch(_){};try{this.ac?.close()}catch(_){};this.onend?.();}
     abort(){
       this.active=false;clearInterval(this.timer);this.fetcher?.abort();
       try{if(this.record?.state==='recording')this.record.stop()}catch(_){}
@@ -3032,12 +3052,12 @@ const Pilot = (() => {
           const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});
           if(!this.active){stream.getTracks().forEach(t=>t.stop());return;}
           this.stream=stream;const A=window.AudioContext||window.webkitAudioContext;this.ac=new A();
-          const analyser=this.ac.createAnalyser();analyser.fftSize=1024;
-          this.ac.createMediaStreamSource(stream).connect(analyser);
+          const focused=makeFocusedAudio(this.ac,stream), analyser=focused.analyser;
+          this.recordStream=focused.recordStream;
           if(this.ac.state!=='running')await this.ac.resume();
           if(!this.active)return;
           const type=['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].find(x=>MediaRecorder.isTypeSupported?.(x));
-          this.record=type ? new MediaRecorder(stream,{mimeType:type}) : new MediaRecorder(stream);
+          this.record=type ? new MediaRecorder(this.recordStream,{mimeType:type}) : new MediaRecorder(this.recordStream);
           this.record.ondataavailable=e=>{if(e.data?.size)this.chunks.push(e.data)};
           this.record.onerror=()=>{if(this.active)this.onerror?.({error:'audio-capture'});this.end()};
           this.record.onstop=()=>{if(this.active)void this.upload();else this.end()};
