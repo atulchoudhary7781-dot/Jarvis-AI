@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import voice, groq_speech
+from . import voice, groq_speech, quota
 from .catalog import Catalog
 from .skills import MAX_QUERY, RateLimit, answer, reply
 
@@ -27,7 +27,17 @@ def make_server(port=8765, *, preview=False, desktop=None):
     # Paid/free quota is available only in an explicitly restricted test session.
     # Never enable unauthenticated production merely because a key is present.
     groq_key = os.environ.get("GROQ_API_KEY", "")
-    groq_preview = bool(preview and groq_key and (os.environ.get("VERCEL_ENV") == "preview" or os.environ.get("JARVIS_GROQ_EXPERIMENT") == "1"))
+    redis_url = os.environ.get("KV_REST_API_URL", "")
+    redis_token = os.environ.get("KV_REST_API_TOKEN", "")
+    if not (redis_url and redis_token):
+        redis_url = os.environ.get("UPSTASH_REDIS_REST_URL", "")
+        redis_token = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
+    vercel_env = os.environ.get("VERCEL_ENV", "")
+    quota_test = vercel_env == "preview" and os.environ.get("JARVIS_GROQ_QUOTA_TEST") == "1"
+    guarded = (vercel_env == "production" and os.environ.get("JARVIS_GROQ_PUBLIC") == "1") or quota_test
+    groq_public = bool(preview and groq_key and guarded and quota.valid_config(redis_url, redis_token))
+    groq_preview = bool(preview and groq_key and not quota_test and (vercel_env == "preview" or (vercel_env != "production" and os.environ.get("JARVIS_GROQ_EXPERIMENT") == "1")))
+    groq_enabled = groq_preview or groq_public
     body = (
         UI.read_text(encoding="utf-8")
         .replace(
@@ -41,7 +51,7 @@ def make_server(port=8765, *, preview=False, desktop=None):
             else '<meta name="jarvis-voice" content="system">',
         )
         .replace('<meta name="jarvis-cloud" content="off">',
-                 '<meta name="jarvis-cloud" content="preview">' if groq_preview else '<meta name="jarvis-cloud" content="off">')
+                 '<meta name="jarvis-cloud" content="preview">' if groq_enabled else '<meta name="jarvis-cloud" content="off">')
         .encode()
     )
     script = body.split(b"<script>", 1)[1].split(b"</script>", 1)[0]
@@ -147,7 +157,7 @@ def make_server(port=8765, *, preview=False, desktop=None):
             elif route not in {"/api/command", "/api/voice", "/api/transcribe", "/api/translate"}:
                 return self.out(404, {"error": "Not found"})
             is_groq = route in {"/api/transcribe", "/api/translate"}
-            if is_groq and not groq_preview:
+            if is_groq and not groq_enabled:
                 return self.out(404, {"error": "Not found"})
             if is_groq and not self.headers.get("Origin"):
                 return self.out(403, {"error": "Same origin required"})
@@ -185,7 +195,7 @@ def make_server(port=8765, *, preview=False, desktop=None):
                         return self.out(200, desktop.commit(req["app"], req["permit"]))
                     raise ValueError()
                 if is_groq:
-                    if not groq_limit.allow(self.client_address[0]) or not groq_global.allow("global"):
+                    if not groq_public and (not groq_limit.allow(self.client_address[0]) or not groq_global.allow("global")):
                         return self.out(429, {"ok": False, "reason": "rate_limited"})
                     if not slots.acquire(blocking=False):
                         return self.out(429, {"ok": False, "reason": "busy"})
@@ -194,6 +204,8 @@ def make_server(port=8765, *, preview=False, desktop=None):
                             if set(req) != {"audio", "mime"} or not isinstance(req.get("audio"), str) or len(req["audio"]) > 2_000_000:
                                 raise ValueError("Invalid audio")
                             audio = base64.b64decode(req["audio"], validate=True)
+                            if groq_public and not quota.reserve(redis_url, redis_token, self.headers.get("x-vercel-forwarded-for", ""), 2):
+                                return self.out(429, {"ok": False, "reason": "rate_limited"})
                             result = groq_speech.transcribe(audio, req["mime"], groq_key)
                             # A failed translation cannot be interpreted as an action.
                             if result.get("ok") and result.get("text") and result.get("language", "").lower() not in {"", "english", "en", "hindi", "hi"}:
@@ -204,6 +216,8 @@ def make_server(port=8765, *, preview=False, desktop=None):
                             return self.out(200, result)
                         if set(req) != {"text", "target"}:
                             raise ValueError("Invalid translation")
+                        if groq_public and not quota.reserve(redis_url, redis_token, self.headers.get("x-vercel-forwarded-for", ""), 1):
+                            return self.out(429, {"ok": False, "reason": "rate_limited"})
                         return self.out(200, groq_speech.translate(req["text"], req["target"], groq_key))
                     finally:
                         slots.release()

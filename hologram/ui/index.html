@@ -6,7 +6,7 @@
 #status{position:fixed;z-index:3;left:50%;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 60px);transform:translateX(-50%);width:min(90vw,580px);max-height:22vh;overflow:auto;color:#f9dfb8;background:#101010dc;border-radius:10px;text-align:center;padding:7px 10px;font:14px/1.4 system-ui;white-space:pre-wrap}#status:empty{display:none}
 #mobilebar,#typebox{display:none!important}
 #status,#review:not([hidden]){position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;overflow:hidden!important;white-space:nowrap!important;border:0!important;left:0!important;bottom:auto!important;transform:none!important}
-</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. After each answer JARVIS listens for the next question. Say listen patiently for longer pauses, or what did you hear for the last phrase. External sites require a tap on the named destination and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses and approval requests are spoken and announced to assistive technologies. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
+</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. During an active cloud conversation JARVIS also listens while speaking so you can interrupt. Microphone use and transcription are subject to permission and network availability. Say listen patiently for longer pauses, or what did you hear for the last phrase. External sites require a tap on the hologram after the destination is announced and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses and approval requests are spoken and announced to assistive technologies. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
 "use strict";
 /* AMBER / Geometry atlas. All positions are generated in three dimensions.
    Four moving assemblies: outer skin, inner machinery, signal bus, and lens. */
@@ -2231,12 +2231,12 @@ const Pilot = (() => {
     timer = null;
   let phraseTimer=0, lastHeard='', patient=false, inputLang='';
   const cloudSpeech = document.querySelector('meta[name="jarvis-cloud"]').content === 'preview';
-  let cloudConsent = false, speechTarget = '';
+  let cloudConsent = false, speechTarget = '', spokenReply = '';
   const canCloud = () => !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder && (window.AudioContext || window.webkitAudioContext));
   function consentCloud(){
     if(!cloudSpeech || cloudConsent) return true;
     if(!canCloud()) { announce('Cloud voice is unavailable in this browser.'); return false; }
-    const ok=window.confirm('JARVIS sends your speech audio to Groq for transcription and language processing. Do not say secrets. Allow this for this tab?');
+    const ok=window.confirm('JARVIS listens while speaking so you can interrupt. When speech is detected, audio may include sound from the speaker and is sent to Groq for transcription and language processing. Do not say secrets. Allow this for this tab?');
     if(ok) cloudConsent=true;
     return ok;
   }
@@ -2633,7 +2633,7 @@ const Pilot = (() => {
     let rest = String(text).replace(/\s+/g, " ").trim().slice(0, 1150),
       out = [];
     while (rest) {
-      let limit = out.length ? 112 : 88;
+      let limit = out.length ? 112 : 56; // A shorter first clause can start speaking sooner.
       if (rest.length <= limit) {
         out.push(rest);
         break;
@@ -2656,6 +2656,12 @@ const Pilot = (() => {
     return out.filter(Boolean);
   }
   const b64bytes = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  // Only an explicitly consented cloud session monitors playback. Detection is
+  // best effort: browser echo cancellation is requested, not guaranteed.
+  function startBargeIn() {
+    if (cloudSpeech && cloudConsent && armed && player && !rec && !typed && !document.hidden)
+      listen(ticket, 0, null, true);
+  }
   function playNative(text, lang, valid) {
     return new Promise((resolve) => {
       if (!synth || !window.SpeechSynthesisUtterance || !valid()) {
@@ -2695,6 +2701,7 @@ const Pilot = (() => {
         root.dataset.speaker = "system";
         stage.meter(null);
         state("speaking");
+        startBargeIn();
         stage.pulse(0.4);
       };
       u.onstart = start;
@@ -2767,6 +2774,7 @@ const Pilot = (() => {
           root.dataset.speaker = clip.speaker;
           stage.meter(() => at(ctx.currentTime - started));
           state("speaking");
+          startBargeIn();
         } catch (_) {
           end(false);
           return;
@@ -2809,6 +2817,7 @@ const Pilot = (() => {
         root.dataset.speaker = clip.speaker;
         stage.meter(() => at(a.currentTime));
         state("speaking");
+        startBargeIn();
       };
       a.onended = () => end(valid());
       a.onerror = () => end(false);
@@ -2838,6 +2847,7 @@ const Pilot = (() => {
       } catch (_) { /* Keep the original response if translation fails. */ }
       if(!valid())return;
     }
+    spokenReply=String(text);
     const parts = phrases(text);
     let i = 0;
     const canNeural = () =>
@@ -2908,7 +2918,7 @@ const Pilot = (() => {
     }
     if (!valid()) return;
     stage.meter(null);
-    if (armed) scheduleListen(460);
+    if (armed) scheduleListen(240);
     else state("idle");
   }
   function useLanguage(l, notify = true) {
@@ -2959,6 +2969,13 @@ const Pilot = (() => {
       state("idle");
       return;
     }
+    if (rec?.barge) {
+      rec.barge=false;
+      rec.echoText='';
+      rec.relax?.();
+      state("listening");
+      return;
+    }
     state("standby");
     const tok = ticket;
     let checks = 0;
@@ -2978,8 +2995,27 @@ const Pilot = (() => {
     };
     rearm = setTimeout(again, delay);
   }
-  /* Preview-only cloud recognizer. Captures a single bounded turn; the microphone
-     is released before upload, and an abort invalidates both capture and network. */
+  /* Small energy gate, not a neural VAD: retain the whole clip from mic start,
+     adapt to quiet background, reject isolated spikes and allow natural pauses. */
+  // VOICE_GATE_BEGIN
+  function makeVoiceGate(patientMode, interruptMode=false) {
+    let noise=0.003, above=0, heard=false, last=0;
+    return (rms, now) => {
+      const threshold=Math.max(interruptMode ? 0.035 : 0.009, Math.min(0.05, noise*2.5+0.002));
+      if(!heard && rms<threshold) noise=Math.max(0.001, Math.min(0.019, noise*0.96+rms*0.04));
+      if(!heard) {
+        above=rms>threshold ? above+1 : 0;
+        if(above>=(interruptMode ? 4 : 2)){heard=true;last=now;return 'speech';}
+      } else if(rms>threshold*0.75) last=now;
+      if(heard && now-last>(patientMode ? 2500 : 1050))return 'complete';
+      if(now>=20000)return heard && now-last<1000 ? 'too-long' : (heard ? 'complete' : 'quiet');
+      if(!heard && now>=10000)return 'quiet';
+      return 'wait';
+    };
+  }
+  // VOICE_GATE_END
+  /* Captures one bounded turn; the microphone is released before upload, and
+     abort invalidates both capture and network. The app does not save audio to disk. */
   class CloudRecognition {
     constructor(){this.active=false;this.ended=false;this.stream=null;this.record=null;this.ac=null;this.timer=0;this.fetcher=null;this.chunks=[];}
     end(){if(this.ended)return;this.ended=true;this.active=false;clearInterval(this.timer);try{this.stream?.getTracks().forEach(t=>t.stop())}catch(_){};try{this.ac?.close()}catch(_){};this.onend?.();}
@@ -3006,15 +3042,17 @@ const Pilot = (() => {
           this.record.onerror=()=>{if(this.active)this.onerror?.({error:'audio-capture'});this.end()};
           this.record.onstop=()=>{if(this.active)void this.upload();else this.end()};
           this.record.start(250);this.onstart?.();
-          const samples=new Uint8Array(analyser.fftSize),start=performance.now();let heard=false,last=0,stopped=false;
+          const samples=new Uint8Array(analyser.fftSize),start=performance.now();let gate=makeVoiceGate(patient,!!this.barge),stopped=false;
+          this.relax=()=>{gate=makeVoiceGate(patient,false)};
           const stop=()=>{if(stopped)return;stopped=true;clearInterval(this.timer);try{stream.getTracks().forEach(t=>t.stop())}catch(_){};if(this.record.state==='recording')this.record.stop()};
           this.timer=setInterval(()=>{
             if(!this.active)return;
             analyser.getByteTimeDomainData(samples);let sum=0;for(const v of samples)sum+=(v-128)*(v-128);
-            const rms=Math.sqrt(sum/samples.length)/128,now=performance.now();
-            if(rms>0.018){if(!heard)this.onspeechstart?.();heard=true;last=now;}
-            if((heard && now-last>1250 && now-start>1100) || now-start>16000)stop();
-            else if(!heard && now-start>9000){this.active=false;stop();this.end();}
+            const event=gate(Math.sqrt(sum/samples.length)/128,performance.now()-start);
+            if(event==='speech')this.onspeechstart?.();
+            else if(event==='complete')stop();
+            else if(event==='quiet'){this.active=false;stop();this.end();}
+            else if(event==='too-long'){this.onerror?.({error:'too-long'});this.active=false;stop();this.end();}
           },100);
         }catch(e){if(this.active)this.onerror?.({error:e?.name==='NotAllowedError'?'not-allowed':'audio-capture'});this.end()}
       })();
@@ -3022,13 +3060,20 @@ const Pilot = (() => {
     async upload(){
       try{
         const blob=new Blob(this.chunks,{type:this.record.mimeType||'audio/webm'});this.chunks=[];
-        if(!this.active || !blob.size || blob.size>1500000){this.end();return;}
+        if(!this.active){this.end();return;}
+        // A malformed or oversized recording must not silently rearm forever.
+        if(!blob.size || blob.size>1500000){this.onerror?.({error:blob.size ? 'too-long' : 'audio-capture'});this.end();return;}
         const audio=await new Promise((resolve,reject)=>{const f=new FileReader();f.onload=()=>resolve(String(f.result).split(',')[1]);f.onerror=reject;f.readAsDataURL(blob)});
         if(!this.active)return;this.fetcher=new AbortController();
-        const tm=setTimeout(()=>this.fetcher.abort(),26000);
+        const tm=setTimeout(()=>this.fetcher.abort(),45000);
         let response;try{response=await fetch('/api/transcribe',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({audio,mime:blob.type}),signal:this.fetcher.signal})}finally{clearTimeout(tm)}
         if(!this.active)return;const result=await response.json();
         if(!result?.ok){this.onerror?.({error:'network'});this.end();return;}
+        // Suppress obvious speaker echo; this is a safeguard, not reliable
+        // acoustic echo cancellation or proof that a transcript is user speech.
+        const fold=x=>String(x||'').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+        const heard=fold(result.text), reply=fold(this.echoText);
+        if(reply && heard.length>=12 && reply.includes(heard)){this.end();return;}
         const name=String(result.language||'').toLowerCase(),code=languageCode(name);
         speechTarget=code && !['hi','en'].includes(code)?name:'';
         if(code==='hi')useLanguage('hi-IN',false);else useLanguage('en-IN',false);
@@ -3038,9 +3083,9 @@ const Pilot = (() => {
       }catch(_){if(this.active)this.onerror?.({error:'network'});this.end()}
     }
   }
-  function listen(tok, startupWait = 0, carry = null) {
+  function listen(tok, startupWait = 0, carry = null, barge = false) {
     let awaitingStart = startupWait > 0;
-    if ((!armed && !awaitingStart) || tok !== ticket || typed || document.hidden || rec || player) return;
+    if ((!armed && !awaitingStart) || tok !== ticket || typed || document.hidden || rec || (player && !barge)) return;
     const R = cloudSpeech ? CloudRecognition : (window.SpeechRecognition || window.webkitSpeechRecognition);
     if (!R) {
       cancel();
@@ -3080,7 +3125,7 @@ const Pilot = (() => {
       root.dataset.micLaunch = "started";
       listening();
       clearTimeout(recordLimit);
-      recordLimit = setTimeout(quiet, 26000);
+      recordLimit = setTimeout(quiet, cloudSpeech ? 70000 : 26000);
     };
     const manualFallback = () => {
       if (!current()) return;
@@ -3126,6 +3171,8 @@ const Pilot = (() => {
             )
           : code === "audio-capture"
             ? words("No microphone is available. Hands-free mode is off.", "माइक नहीं मिला। हैंड्स फ्री मोड बंद है।")
+            : code === "too-long"
+              ? words("That was too long to catch safely. Please tap and try a shorter sentence.", "बात बहुत लंबी थी। कृपया टैप करके छोटा वाक्य बोलें।")
             : code === "network"
               ? words(
                   "The speech recognition service is unreachable. Hands-free mode is off.",
@@ -3140,6 +3187,8 @@ const Pilot = (() => {
     try {
       r = new R();
       rec = r;
+      r.barge = barge;
+      r.echoText = barge ? spokenReply : '';
       r.lang = inputLang || locale;
       r.interimResults = true;
       // iPhone/iPad WebKit may never deliver final results with continuous mode.
@@ -3157,9 +3206,18 @@ const Pilot = (() => {
           )
         );
         r.onstart = r.onaudiostart = didStart;
-      } else listening();
+      } else if (!barge) listening();
       r.onspeechstart = () => {
-        if (current()) {didStart(); resumed=true; clearTimeout(phraseTimer);stage.pulse(0.42);}
+        if (current()) {
+          didStart();
+          if (r.barge && player) {
+            r.barge=false;
+            stopAudio();
+            state("listening");
+            announce(words("Listening to your interruption.", "आपकी नई बात सुन रहा हूँ।"));
+          }
+          resumed=true; clearTimeout(phraseTimer);stage.pulse(0.42);
+        }
       };
       r.onnomatch = () => {if(current())finish(true)};
       r.onresult = e => {
@@ -3189,10 +3247,14 @@ const Pilot = (() => {
           }
         } else rapidEnds = 0;
         rec = null;
+        if (r.barge && player && armed) {
+          rearm=setTimeout(()=>{if(armed && ticket===tok && player && !rec && !document.hidden)listen(tok,0,null,true);},100);
+          return;
+        }
         silence++;
         scheduleListen(Math.min(1850, 330 + silence * 140));
       };
-      recordLimit = setTimeout(awaitingStart ? manualFallback : quiet, startupWait || 26000);
+      recordLimit = setTimeout(awaitingStart ? manualFallback : quiet, startupWait || (cloudSpeech ? 70000 : 26000));
       r.start();
       if(carry && current() && !resumed)settle(hold());
     } catch (_) {
