@@ -2,7 +2,9 @@
 <html lang="hi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#020305"><meta name="jarvis-host" content="portable"><meta name="jarvis-voice" content="system"><meta name="color-scheme" content="dark"><title>J.A.R.V.I.S. · Amber companion</title><link rel="terms-of-service" href="/terms"><link rel="icon" href="data:,"><style>
 :root{color-scheme:dark;background:#020305}*{box-sizing:border-box}html,body,main{width:100%;height:100%;margin:0;overflow:hidden;overscroll-behavior:none}canvas{display:block;width:100%;height:100%;background:#020305;outline:none;touch-action:none;-webkit-tap-highlight-color:transparent;user-select:none;cursor:grab}canvas:active{cursor:grabbing}canvas.rest{cursor:none}.sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;clip:rect(0,0,0,0);clip-path:inset(50%);overflow:hidden;white-space:nowrap;border:0}
 #review[hidden]{display:none}#review{position:fixed;inset:auto 50% max(20px,env(safe-area-inset-bottom)) auto;transform:translateX(50%);display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.6rem;padding:.7rem 1rem;width:max-content;max-width:88vw;border:1px solid #84602b;border-radius:16px;background:#0b0c0feb;color:#f7dfbb;font:500 14px/1.5 system-ui,sans-serif;text-align:center}#destination{width:100%;overflow-wrap:anywhere}#review button{font:inherit;border:1px solid #6c542e;color:#ffddaa;background:#211a10;border-radius:9px;padding:.35rem 1rem;cursor:pointer}#review button:focus-visible{outline:2px solid #ffcf73;outline-offset:2px}
-</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><input id="command" class="sr" aria-label="Voice alternative: type one command and press Enter" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. After each answer JARVIS listens for the next question. Say listen patiently for longer pauses, or what did you hear for the last phrase. External sites require a tap on the named destination; Windows apps require the private launcher and native approval. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. T: type a command without a visible overlay. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div class="sr" role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
+#mobilebar[hidden]{display:none}#mobilebar{position:fixed;z-index:4;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:10px}#mobilebar button,#typebox button{min-height:44px;min-width:65px;border:1px solid #77502b;border-radius:12px;background:#120e0ae8;color:#f9d29a;font:500 14px system-ui;cursor:pointer}#mobilebar button:focus-visible,#typebox button:focus-visible,#command:focus-visible{outline:2px solid #ffc66a;outline-offset:2px}#typebox[hidden]{display:none}#typebox{position:fixed;z-index:8;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);width:min(94vw,580px);display:flex;gap:6px;background:#101010f5;padding:8px;border:1px solid #77502b;border-radius:14px}#typebox input{width:100%;min-width:0;border:1px solid #77502b;border-radius:8px;background:#171410;color:#fff1d6;padding:8px;font:16px system-ui}#review{z-index:10}
+#status{position:fixed;z-index:3;left:50%;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 60px);transform:translateX(-50%);width:min(90vw,580px);max-height:22vh;overflow:auto;color:#f9dfb8;background:#101010dc;border-radius:10px;text-align:center;padding:7px 10px;font:14px/1.4 system-ui;white-space:pre-wrap}#status:empty{display:none}
+</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. After each answer JARVIS listens for the next question. Say listen patiently for longer pauses, or what did you hear for the last phrase. External sites require a tap on the named destination and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses are visible on screen. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. T or the Type button: type a command using the visible input. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
 "use strict";
 /* AMBER / Geometry atlas. All positions are generated in three dimensions.
    Four moving assemblies: outer skin, inner machinery, signal bus, and lens. */
@@ -2137,6 +2139,9 @@ const Pilot = (() => {
     ['wikipedia','Wikipedia','विकिपीडिया','https://hi.wikipedia.org/','विकिपीडिया|विकीपीडिया'],
     ['github','GitHub','गिटहब','https://github.com/','git hub|गिटहब|गिट हब'],
     ['google','Google','गूगल','https://www.google.com/','गूगल|गूगल सर्च'],
+    ['telegram','Telegram','टेलीग्राम','https://t.me/','टेलीग्राम'],
+    ['whatsapp','WhatsApp','व्हाट्सऐप','https://www.whatsapp.com/','whats app|व्हाट्सएप|व्हाट्सऐप|वाट्सऐप'],
+    ['textedit','TextEdit','टेक्स्ट एडिट',null,'text edit|टेक्स्ट एडिट|टेक्स्टएडिट'],
     ['calculator','Calculator','कैलकुलेटर',null,'calc|कैलकुलेटर|कैलक्यूलेटर|केलकुलेटर|कैलकुलेटर ऐप'],
     ['notepad','Notepad','नोटपैड',null,'note pad|नोटपैड|नोट पैड|नोटपेड'],
     ['paint','Paint','पेंट',null,'ms paint|microsoft paint|पेंट|एमएस पेंट'],
@@ -2185,6 +2190,8 @@ const Pilot = (() => {
   const stage = makeStage(document.getElementById("core")),
     core = document.getElementById("core"),
     field = document.getElementById("command"),
+    typebox = document.getElementById("typebox"),
+    mobilebar = document.getElementById("mobilebar"),
     status = document.getElementById("status"),
     root = document.documentElement;
   const isFrame = parent !== window && /\/component\//.test(location.pathname);
@@ -2281,20 +2288,20 @@ const Pilot = (() => {
   go.addEventListener('click', e=>confirmWeb(e));back.addEventListener('click',()=>{cancel();core.focus({preventScroll:true})});
   function proposeWeb(a){cancel(); const label=words(a.en,a.hi), suffix=a.term?' · '+a.term:'';
     review={url:a.url,until:Date.now()+45000,tok:ticket};tray.hidden=false;
-    document.getElementById('destination').textContent=words('Open in a new tab','नए टैब में खोलें')+' · '+new URL(a.url).hostname+suffix;
+    document.getElementById('destination').textContent=words('Open app or website','ऐप या वेबसाइट खोलें')+' · '+new URL(a.url).hostname+suffix;
     go.textContent=label+' ↗';back.textContent=words('Cancel','रद्द करें');go.focus({preventScroll:true});
     reviewTimer=setTimeout(()=>{if(review)cancel()},45000);
     speak(words(`${label}${suffix}. Tap to open it, or press Escape to leave it here.`,`${label}${suffix} खोलूँ? खोलने के लिए नाम पर टैप करो।`));
   }
   async function nativeApp(a,tok){
-    if(!deskKey){speak(words(`${a.en} is a Windows app. Start Private JARVIS on your PC; this website can't run it.`,`${a.hi} विंडोज़ ऐप है। अपने पीसी पर प्राइवेट जार्विस चलाओ। वेबसाइट से तुम्हारा कंप्यूटर नहीं चल सकता।`));return;}
-    setArmed(false);state('thinking');announce(words(`Approve ${a.en} in the Windows dialog.`,`विंडोज़ के डायलॉग में ${a.hi} की पुष्टि करो।`));
+    if(!deskKey){speak(words(`${a.en} needs the private desktop launcher on a supported computer. A website cannot run this app.`,`${a.hi} के लिए अपने कंप्यूटर पर प्राइवेट जार्विस चलाओ। वेबसाइट से यह ऐप नहीं खुल सकता।`));return;}
+    setArmed(false);state('thinking');announce(words(`Approve ${a.en} in the computer’s dialog.`,`कंप्यूटर के डायलॉग में ${a.hi} की पुष्टि करो।`));
     const c=new AbortController();deskCall=c;const tm=setTimeout(()=>c.abort(),32000);
     const live=()=>ticket===tok&&!document.hidden&&deskCall===c&&!c.signal.aborted;
     async function post(op,body){const res=await fetch('/api/desktop/'+op,{method:'POST',credentials:'omit',cache:'no-store',redirect:'error',headers:{'Content-Type':'application/json','X-Jarvis-Session':deskKey},body:JSON.stringify(body),signal:c.signal});if(!res.ok)throw Error();return res.json()}
     try{const p=await post('approve',{app:a.id});if(!live())return;
       if(!p.ok||typeof p.permit!=='string'){speak(words(`No launch. ${a.en} stayed closed.`,`ठीक है, ${a.hi} नहीं खोला।`));return;}
-      const result=await post('commit',{app:a.id,permit:p.permit});if(live())speak(result.ok?words(`I started ${a.en}.`,`${a.hi} शुरू कर दिया।`):words('Windows could not start it.','विंडोज़ इसे शुरू नहीं कर पाया।'));
+      const result=await post('commit',{app:a.id,permit:p.permit});if(live())speak(result.ok?words(`I started ${a.en}.`,`${a.hi} शुरू कर दिया।`):words('The app could not be started on this computer.','कंप्यूटर पर यह ऐप शुरू नहीं हो पाया।'));
     }catch(_){if(ticket===tok&&!document.hidden)speak(words('I couldn’t confirm the launch. Check the private session on your PC.','ऐप खुलने की पुष्टि नहीं हुई। अपने पीसी का प्राइवेट सेशन देखो।'));}
     finally{clearTimeout(tm);if(deskCall===c)deskCall=null;}
   }
@@ -2303,7 +2310,7 @@ const Pilot = (() => {
     else if(transport!=='http'||window.top!==window)speak(words('Open JARVIS in its own tab for launch requests.','कुछ खोलने के लिए जार्विस को उसके अपने टैब में खोलो।'));
     else if(a.kind==='web')proposeWeb(a);
     else if(a.kind==='desktop')void nativeApp(a,tok);
-    else speak(words('That isn’t on my launch list. Try YouTube or Maps, or Calculator in the private Windows app.','यह मेरी खोलने वाली सूची में नहीं है। यूट्यूब या मैप्स बोलकर देखो। पीसी पर कैलकुलेटर भी खोल सकता हूँ।'));
+    else speak(words('That isn’t on my launch list. Try YouTube or Maps, or Calculator in a private desktop session.','यह मेरी खोलने वाली सूची में नहीं है। यूट्यूब या मैप्स बोलकर देखो। पीसी पर कैलकुलेटर भी खोल सकता हूँ।'));
     return true;
   }
   function noteChat(input, reply) {
@@ -2387,6 +2394,8 @@ const Pilot = (() => {
     typed = false;
     field.value = "";
     field.disabled = true;
+    typebox.hidden = true;
+    mobilebar.hidden = false;
     if (document.activeElement === field) field.blur();
   }
   function invalidate() {
@@ -2902,8 +2911,8 @@ const Pilot = (() => {
     if (!(window.SpeechRecognition || window.webkitSpeechRecognition)) {
       speak(
         words(
-          "Voice input is not available here. Try Chrome or Edge in a separate tab, or press T to type.",
-          "यहाँ आवाज़ पहचान उपलब्ध नहीं है। अलग टैब में क्रोम या एज खोलें, या टी दबाकर टाइप करें।"
+          "Voice input is not available here. Try Chrome or Edge in a separate tab, or use the Type button.",
+          "यहाँ आवाज़ पहचान उपलब्ध नहीं है। अलग टैब में क्रोम या एज खोलें, या Type बटन से लिखें।"
         )
       );
       return;
@@ -3031,8 +3040,8 @@ const Pilot = (() => {
                   "आवाज़ पहचान की सेवा नहीं मिली। हैंड्स फ्री मोड बंद है।"
                 )
               : words(
-                  "The browser stopped voice input. Tap to turn it on again, or press T to type.",
-                  "ब्राउज़र ने माइक रोक दिया। फिर चालू करने के लिए टैप करें या टी दबाकर टाइप करें।"
+                  "The browser stopped voice input. Tap to turn it on again, or use the Type button.",
+                  "ब्राउज़र ने माइक रोक दिया। फिर चालू करने के लिए टैप करें या Type बटन से लिखें।"
                 );
       speak(msg);
     };
@@ -3041,7 +3050,9 @@ const Pilot = (() => {
       rec = r;
       r.lang = inputLang || locale;
       r.interimResults = true;
-      r.continuous = true;
+      // iPhone/iPad WebKit may never deliver final results with continuous mode.
+      const appleMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      r.continuous = !appleMobile;
       r.maxAlternatives = 3;
       if (awaitingStart) {
         openingRequest = true;
@@ -3497,37 +3508,31 @@ const Pilot = (() => {
     typed = true;
     field.value = "";
     field.disabled = false;
+    typebox.hidden = false;
+    mobilebar.hidden = true;
     state("listening");
     field.focus({ preventScroll: true });
     announce(
       words(
-        "Type a command and press Enter. No text is shown.",
-        "आदेश टाइप करें और एंटर दबाएँ। स्क्रीन पर टेक्स्ट नहीं दिखेगा।"
+        "Type a command and press Send or Enter.",
+        "आदेश लिखें और भेजें या एंटर दबाएँ।"
       )
     );
   }
-  field.addEventListener("keydown", (e) => {
-    e.stopPropagation();
-    if (e.isComposing) return;
-    if (e.key === "Escape") {
-      e.preventDefault();
-      cancel();
-      core.focus({ preventScroll: true });
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      let text = field.value;
-      finishField();
-      core.focus({ preventScroll: true });
-      if (text.trim()) execute(text, ticket);
-      else state("idle");
-    }
+  function sendTyped(){
+    if(!typed) return;
+    const text=field.value;
+    finishField();core.focus({preventScroll:true});
+    if(text.trim()) void execute(text,ticket); else state("idle");
+  }
+  typebox.addEventListener("submit", e=>{e.preventDefault();sendTyped()});
+  field.addEventListener("keydown", e=>{
+    e.stopPropagation();if(e.isComposing)return;
+    if(e.key==="Escape"){e.preventDefault();cancel();core.focus({preventScroll:true});}
   });
-  field.addEventListener("blur", () => {
-    if (typed) {
-      finishField();
-      state("idle");
-    }
-  });
+  document.getElementById('cancel-command').addEventListener('click',()=>{cancel();core.focus({preventScroll:true})});
+  document.getElementById('type-action').addEventListener('click',()=>startTyping());
+  document.getElementById('mic-action').addEventListener('click',e=>{if(review){cancel();return}toggle(e)});
   function full() {
     try {
       if (document.fullscreenElement) document.exitFullscreen()?.catch(() => {});
@@ -3598,7 +3603,7 @@ const Pilot = (() => {
     if (e.detail === 0) toggle(e);
   });
   document.addEventListener("keydown", (e) => {
-    if (tray.contains(e.target) && ["Enter", " "].includes(e.key)) return;
+    if ((tray.contains(e.target) || typebox.contains(e.target) || mobilebar.contains(e.target)) && ["Enter", " "].includes(e.key)) return;
     if (typed || e.repeat || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
     let k = e.key.toLowerCase();
     if (k === " " || k === "enter") {

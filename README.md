@@ -6,9 +6,11 @@ A Hindi and English voice companion with an animated hologram, spoken replies, p
 
 ![JARVIS hologram](docs/amber-core.webp)
 
+> Cross-device and native app features are experimental. The public deployment may not yet contain the latest repository changes; real-device testing is still needed.
+
 ## Getting started
 
-1. Open the live site in its own tab in Chrome or Edge.
+1. Open JARVIS in its own browser tab. Speech recognition and microphone permission vary by browser and device.
 2. Allow microphone access if prompted. JARVIS attempts to listen automatically when the page opens. Browser permissions, device settings, and autoplay rules can require a tap on the core or a press of **Space**.
 3. Say **“Hello”**, **“Time in Tokyo”**, or **“Open YouTube.”** Hindi is the default reply language; say **“Speak in English”** for English replies.
 4. Say **“Stop listening”**, press **Esc**, or tap the core to turn the microphone off. Leaving the tab also disarms it.
@@ -23,13 +25,13 @@ The microphone is released while JARVIS is thinking or speaking. If automatic pl
 | Speech and listening | Synthesized Hindi and English voices, pause-aware turn-taking, and recognition alternatives. Say **“Listen patiently”** for longer pauses or **“Normal pauses”** to return to the default. |
 | Recognition language | Say **“Listen in Hindi”** or **“Listen in English.”** The reply language is controlled separately. Say **“What did you hear”** to hear the previous recognized phrase. |
 | Website opening | Say **“Open YouTube”**, **“Open Google Maps”**, or **“Search YouTube for music.”** Review the displayed destination and tap its button to open it. |
-| Local Windows apps | An optional, separate Windows session can request Calculator, Notepad, or Paint. A native Windows confirmation is required for each launch. See [Windows app control](#windows-app-control-experimental). |
+| Local computer apps | An optional private session can request Calculator, Notepad and Paint on Windows, or Calculator and TextEdit on macOS, after native approval. See [Local app control](#local-app-control-experimental). |
 | Public information | Ask for a city clock or date, weather, world headlines, or a Wikipedia search. Availability depends on the upstream services. |
 | Timers and view controls | Say **“Set a timer for five minutes,”** **“Cancel timer,”** **“Zoom in,”** or **“Reset view.”** Timers last only while the tab remains open. |
 | Personal shortcuts | Teach a reviewed routine or quiz, confirm it, and run it later by name. Shortcuts are stored in the current browser profile. |
 | Community skills | Say **“Community skills”** to discover reviewed examples such as **“City duet”** and **“Planet pop quiz.”** |
 
-The browser's speech-recognition service and microphone determine recognition accuracy. Hindi and Hinglish may still be misheard; recognition is not guaranteed. For a missed command, repeat it or use **T** to type a command and **Enter** to send it.
+The browser's speech-recognition service and microphone determine recognition accuracy. Hindi and Hinglish may still be misheard; recognition is not guaranteed. For a missed command, repeat it or use the visible **Type** button, then **Send**. Spoken replies and status messages are also displayed on screen; anyone looking at the screen can see them.
 
 ### Keyboard controls
 
@@ -51,9 +53,9 @@ Say **“When I say match day, then time in London.”** JARVIS reads the propos
 
 The notebook supports up to 24 personal recipes in the browser. Recipes can combine supported public lookups, start a timer, or store a quiz card; they cannot install software or run code. If browser storage is blocked, saved items may last only for the current page.
 
-## Windows app control (experimental)
+## Local app control (experimental)
 
-The public website **cannot control your PC**. To try local app control on your own Windows computer:
+The public website **cannot control apps on your computer**. To try local app control on your own Windows computer:
 
 1. Install Python 3.9 or later. A 64-bit Python 3.12 installation is recommended if you also want the optional neural voice.
 2. Optionally run `Start Enhanced JARVIS.cmd` and approve the voice setup. Close that session when it opens.
@@ -61,7 +63,19 @@ The public website **cannot control your PC**. To try local app control on your 
 4. Allow the microphone if needed. Say **“Open Calculator,”** **“Open Notepad,”** or **“Open Paint.”** Approve only a request that you made in the Windows dialog. The dialog defaults to **No**.
 5. Close the command window to stop the local session. Restart it after the two-hour session expires.
 
-Only the three named Windows system applications are allowed. The broker uses a loopback-only session, accepts no shell commands or arbitrary paths, and uses short-lived, single-use approvals. Native Windows execution has been tested with mocked dialogs and launches, **not yet on a real Windows PC**. Use a trusted, locked Windows account: malicious software already running as your user can bypass these protections.
+On macOS, install Python 3.9 or newer, open Terminal in the extracted JARVIS folder, and run:
+
+```sh
+python3 launch_hologram.py --desktop --browser-tab --port 0
+```
+
+Keep Terminal open. Ask for **Calculator** or **TextEdit**, then approve the macOS dialog only if you made the request. Start as a normal user, never root. Close Terminal or press Ctrl+C to stop. This uses fixed system app locations; if they are absent on your macOS version, launching will fail.
+
+The broker is loopback-only, accepts no shell commands or arbitrary paths, and uses short-lived, single-use approvals. Windows and macOS dialogs and launches were tested with mocks, **not yet on real computers**. Use a trusted, locked account: malicious software already running as your user can bypass these protections.
+
+### Phones and tablets
+
+On Android or iOS, supported links such as YouTube and Google Maps are shown for approval. Depending on the app, operating system, browser, and link settings, tapping may open the app or its website; this is not a general installed-app launcher. Websites cannot enumerate or launch arbitrary installed mobile apps. Voice recognition and automatic playback also vary; use **Type** if voice is unavailable. Real mobile devices have not yet been tested.
 
 ## Voice, privacy, and safety
 
@@ -99,7 +113,7 @@ python -m unittest discover -s tests -v
 node tests/notebook.cjs
 ```
 
-Optional Playwright browser suites cover microphone lifecycle and command review with simulated recognition. The tests do not prove physical-microphone accuracy or actual Windows execution.
+Optional Playwright browser suites cover microphone lifecycle and command review with simulated recognition. The tests do not prove physical-microphone accuracy, native app associations, or actual Windows or macOS execution.
 
 ## Third-party notices
 
