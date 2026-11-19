@@ -1,7 +1,8 @@
-"""Opt-in Windows broker. Never imported by the public host. No shell, file or URL input."""
+"""Opt-in Windows/macOS broker. Never imported by the public host. No arbitrary commands."""
 from __future__ import annotations
 
 import ctypes
+import os
 import secrets
 import subprocess
 import sys
@@ -11,6 +12,8 @@ from pathlib import Path
 
 # Identifiers, native labels and filenames are build-time constants, not model output.
 APPS = {"calculator": ("Calculator", "calc.exe"), "notepad": ("Notepad", "notepad.exe"), "paint": ("Paint", "mspaint.exe")}
+
+MAC_APPS = {"calculator": ("Calculator", "/System/Applications/Calculator.app"), "textedit": ("TextEdit", "/System/Applications/TextEdit.app")}
 
 
 def _directory():
@@ -22,11 +25,30 @@ def _directory():
 
 
 def _ask(app):
+    if sys.platform == "darwin":
+        label = MAC_APPS[app][0]  # constant, never user-supplied code
+        script = ('button returned of (display dialog "Open ' + label + ' on this Mac? Only approve your own request." '
+                  'with title "JARVIS · Local approval" buttons {"Cancel", "Open"} '
+                  'default button "Cancel" with icon caution giving up after 25)')
+        try:
+            result = subprocess.run(["/usr/bin/osascript", "-e", script], capture_output=True,
+                                    text=True, timeout=29, check=False)
+            return result.returncode == 0 and result.stdout.strip() == "Open"
+        except subprocess.TimeoutExpired:
+            return False
     # System modal is intentionally NOT used. Default is No. A late Yes expires.
     return ctypes.windll.user32.MessageBoxW(None, f"Open {APPS[app][0]} on this PC?\n\nOnly approve if this was your request. This approval expires in 30 seconds.", "JARVIS · Local approval", 0x4 | 0x20 | 0x100 | 0x10000) == 6
 
 
 def _launch(app):
+    if sys.platform == "darwin":
+        path = Path(MAC_APPS[app][1])
+        if not path.is_dir():
+            raise OSError("App not installed at the expected system path")
+        subprocess.run(["/usr/bin/open", "-a", str(path)], shell=False, check=True,
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                       timeout=10)
+        return
     directory = _directory()
     exe = directory / APPS[app][1]
     if not exe.is_file():
@@ -36,7 +58,8 @@ def _launch(app):
 
 
 class DesktopSession:
-    def __init__(self, *, ask=_ask, launch=_launch, clock=time.monotonic):
+    def __init__(self, *, ask=_ask, launch=_launch, clock=time.monotonic, allowed_apps=None):
+        self.allowed_apps = frozenset(APPS if allowed_apps is None else allowed_apps)
         self.key = secrets.token_urlsafe(32)
         self.clock, self.ask, self.launch = clock, ask, launch
         self.expires = clock() + 7200
@@ -50,7 +73,7 @@ class DesktopSession:
                 and self.clock() < self.expires and secrets.compare_digest(key, self.key))
 
     def approve(self, app):
-        if not isinstance(app, str) or app not in APPS or self.clock() >= self.expires:
+        if not isinstance(app, str) or app not in self.allowed_apps or self.clock() >= self.expires:
             return {"ok": False, "reason": "unavailable"}
         if not self.dialog.acquire(blocking=False):
             return {"ok": False, "reason": "busy"}
@@ -68,7 +91,7 @@ class DesktopSession:
             with self.lock:
                 self.permit = (app, p, self.clock() + 4)
             return {"ok": True, "permit": p}
-        except (OSError, AttributeError):
+        except (OSError, AttributeError, subprocess.SubprocessError):
             return {"ok": False, "reason": "unavailable"}
         finally:
             self.dialog.release()
@@ -82,13 +105,17 @@ class DesktopSession:
         try:
             self.launch(app)
             return {"ok": True}
-        except (OSError, AttributeError):
+        except (OSError, AttributeError, subprocess.SubprocessError):
             return {"ok": False, "reason": "unavailable"}
 
 
 def new_session():
-    if sys.platform != "win32":
-        raise ValueError("Desktop actions require Windows.")
-    if ctypes.windll.shell32.IsUserAnAdmin():
-        raise ValueError("Start JARVIS normally, not as administrator.")
-    return DesktopSession()
+    if sys.platform == "win32":
+        if ctypes.windll.shell32.IsUserAnAdmin():
+            raise ValueError("Start JARVIS normally, not as administrator.")
+        return DesktopSession(allowed_apps=APPS)
+    if sys.platform == "darwin":
+        if os.geteuid() == 0:
+            raise ValueError("Start JARVIS as your normal Mac user, not root.")
+        return DesktopSession(allowed_apps=MAC_APPS)
+    raise ValueError("Desktop actions currently require Windows or macOS.")

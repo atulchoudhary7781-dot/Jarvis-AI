@@ -63,7 +63,7 @@ def open_window(url, *, tab=False):
 def main(argv=None):
     ap = argparse.ArgumentParser(description="JARVIS · amber hologram")
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--desktop", action="store_true", help="allow reviewed Windows app launches with native confirmation; loopback only")
+    ap.add_argument("--desktop", action="store_true", help="allow reviewed Windows or macOS app launches with native confirmation; loopback only")
     ap.add_argument("--no-open", action="store_true", help="do not open a browser")
     ap.add_argument(
         "--browser-tab",
