@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import voice
+from . import voice, groq_speech
 from .catalog import Catalog
 from .skills import MAX_QUERY, RateLimit, answer, reply
 
@@ -24,6 +24,10 @@ def make_server(port=8765, *, preview=False, desktop=None):
         raise ValueError("Desktop actions are loopback only")
     public_origin = os.environ.get("JARVIS_PUBLIC_ORIGIN", "").rstrip("/") if preview else ""
     neural = voice.available(os.environ.get("JARVIS_VOICE", "auto"))
+    # Paid/free quota is available only in an explicitly restricted test session.
+    # Never enable unauthenticated production merely because a key is present.
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    groq_preview = bool(preview and groq_key and (os.environ.get("VERCEL_ENV") == "preview" or os.environ.get("JARVIS_GROQ_EXPERIMENT") == "1"))
     body = (
         UI.read_text(encoding="utf-8")
         .replace(
@@ -36,6 +40,8 @@ def make_server(port=8765, *, preview=False, desktop=None):
             if neural
             else '<meta name="jarvis-voice" content="system">',
         )
+        .replace('<meta name="jarvis-cloud" content="off">',
+                 '<meta name="jarvis-cloud" content="preview">' if groq_preview else '<meta name="jarvis-cloud" content="off">')
         .encode()
     )
     script = body.split(b"<script>", 1)[1].split(b"</script>", 1)[0]
@@ -50,6 +56,8 @@ def make_server(port=8765, *, preview=False, desktop=None):
     limit = RateLimit(35 if preview else 24)
     slots = threading.BoundedSemaphore(6)
     voice_limit = RateLimit(55, 60)
+    groq_limit = RateLimit(6, 60)
+    groq_global = RateLimit(30, 60)
     # The shared host deliberately never reads the provider key. This is not a
     # LAN or public gateway to a user's desktop, accounts or paid AI service.
     ai_key = "" if preview else os.environ.get("OPENROUTER_API_KEY", "")
@@ -136,8 +144,13 @@ def make_server(port=8765, *, preview=False, desktop=None):
                         or self.headers.get("Origin") != "http://" + host
                         or not desktop.admits(self.headers.get("X-Jarvis-Session"))):
                     return self.out(403, {"error": "Local approval required"})
-            elif route not in {"/api/command", "/api/voice"}:
+            elif route not in {"/api/command", "/api/voice", "/api/transcribe", "/api/translate"}:
                 return self.out(404, {"error": "Not found"})
+            is_groq = route in {"/api/transcribe", "/api/translate"}
+            if is_groq and not groq_preview:
+                return self.out(404, {"error": "Not found"})
+            if is_groq and not self.headers.get("Origin"):
+                return self.out(403, {"error": "Same origin required"})
             if self.headers.get_content_type() != "application/json":
                 return self.out(415, {"error": "Use JSON"})
             origin = self.headers.get("Origin")
@@ -159,7 +172,7 @@ def make_server(port=8765, *, preview=False, desktop=None):
                 size = int(self.headers.get("Content-Length", "0"))
             except ValueError:
                 return self.out(400, {"error": "Invalid length"})
-            if not 0 < size <= (384 if native else 8500):
+            if not 0 < size <= (2_010_000 if route == "/api/transcribe" else (384 if native else 8500)):
                 return self.out(413, {"error": "Use one short command"})
             try:
                 req = json.loads(self.rfile.read(size))
@@ -171,6 +184,29 @@ def make_server(port=8765, *, preview=False, desktop=None):
                     if route.endswith("/commit") and set(req) == {"app", "permit"}:
                         return self.out(200, desktop.commit(req["app"], req["permit"]))
                     raise ValueError()
+                if is_groq:
+                    if not groq_limit.allow(self.client_address[0]) or not groq_global.allow("global"):
+                        return self.out(429, {"ok": False, "reason": "rate_limited"})
+                    if not slots.acquire(blocking=False):
+                        return self.out(429, {"ok": False, "reason": "busy"})
+                    try:
+                        if route == "/api/transcribe":
+                            if set(req) != {"audio", "mime"} or not isinstance(req.get("audio"), str) or len(req["audio"]) > 2_000_000:
+                                raise ValueError("Invalid audio")
+                            audio = base64.b64decode(req["audio"], validate=True)
+                            result = groq_speech.transcribe(audio, req["mime"], groq_key)
+                            # A failed translation cannot be interpreted as an action.
+                            if result.get("ok") and result.get("text") and result.get("language", "").lower() not in {"", "english", "en", "hindi", "hi"}:
+                                tr = groq_speech.translate(result["text"], "English", groq_key)
+                                if not tr.get("ok"):
+                                    return self.out(200, {"ok": False, "reason": "unavailable"})
+                                result["command"] = tr["text"]
+                            return self.out(200, result)
+                        if set(req) != {"text", "target"}:
+                            raise ValueError("Invalid translation")
+                        return self.out(200, groq_speech.translate(req["text"], req["target"], groq_key))
+                    finally:
+                        slots.release()
                 if route == "/api/voice":
                     if (
                         not isinstance(req, dict)
