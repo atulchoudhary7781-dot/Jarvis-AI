@@ -139,6 +139,25 @@ HI_COUNTRY = {
 }
 
 
+# Weather in an entire country or region is not one temperature. Ambiguous
+# country names need a city rather than a geocoder's arbitrary midpoint.
+_WEATHER_AREA = object()
+_WEATHER_COUNTRIES = {x.casefold() for x in (*HI_COUNTRY.keys(), *HI_COUNTRY.values())} | {
+    "india", "indiaa", "इंडिया", "हिंदुस्तान", "हिन्दुस्तान", "bharat", "hindustan",
+    "usa", "us", "u.s.a", "america", "americaa", "uk", "britain", "england",
+    "france", "फ्रांस", "रूस", "russia", "china", "चीन", "pakistan", "पाकिस्तान",
+    "bangladesh", "बांग्लादेश", "sri lanka", "श्रीलंका", "श्री लंका", "nepal", "uae",
+}
+
+
+def country_weather_name(name):
+    if "," in name:
+        return False  # A "city, country" request is a specific location.
+    q = " ".join(name.casefold().strip(" .").split())
+    q = re.sub(r"^(?:(?:all of|whole|across|पूरे|पूरा|सारे|सम्पूर्ण|संपूर्ण)\s+)", "", q)
+    return q in _WEATHER_COUNTRIES
+
+
 def norm(s):
     return " ".join(s.casefold().replace("’", "'").strip(" \t!?।.").split())
 
@@ -193,9 +212,11 @@ def location_hint(q, pat):
 
 
 @lru_cache(maxsize=256)
-def place(name, language="en"):
+def place(name, language="en", *, city_only=False):
     city, _, country = name.partition(",")
     city, country = city.strip(), country.strip().casefold()
+    if city_only and country_weather_name(name) and city.casefold() not in {"singapore", "सिंगापुर"}:
+        return _WEATHER_AREA
     known = ALIASES.get(city.casefold())
     if known and (not country or country == known[1].casefold()):
         return known
@@ -216,6 +237,9 @@ def place(name, language="en"):
     if not rows:
         return None
     r = rows[0]
+    feature = str(r.get("feature_code", "")).upper()
+    if city_only and (feature.startswith("PCL") or feature.startswith("ADM") or feature == "CONT"):
+        return _WEATHER_AREA
     lat, lon = float(r["latitude"]), float(r["longitude"])
     if not (math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180):
         raise ValueError("Invalid coordinates")
@@ -351,7 +375,7 @@ def conditions(loc, lang, now=None):
     label = name if not country or name == country else f"{name}, {country}"
     hi_label = HI_CITY.get(name, name)
     if country and name != country:
-        hi_label += ", " + HI_COUNTRY.get(country, country)
+        hi_label = HI_COUNTRY.get(country, country) + " में " + hi_label
     if age > 4 * 3600:
         return reply(
             f"I do not have a fresh reading for {label}. Open-Meteo’s last available report was {val} degrees Celsius at {timestamp}, local time.",
@@ -365,7 +389,7 @@ def conditions(loc, lang, now=None):
         f"Open-Meteo reports {val} degrees Celsius in {label}"
         + (f", with {en}" if en else "")
         + ".",
-        f"ओपन मीटियो के अनुसार {hi_label} में तापमान {val} डिग्री सेल्सियस है"
+        f"ओपन मीटियो के अनुसार {hi_label} का तापमान {val} डिग्री सेल्सियस है"
         + (f" और {hi}" if hi else "")
         + "।",
         lang,
@@ -395,7 +419,7 @@ def openweather_conditions(loc, lang, key, now=None):
     label = name if not country or name == country else f"{name}, {country}"
     hi_label = HI_CITY.get(name, name)
     if country and name != country:
-        hi_label += ", " + HI_COUNTRY.get(country, country)
+        hi_label = HI_COUNTRY.get(country, country) + " में " + hi_label
     if age > 4 * 3600:
         return reply(
             f"I do not have a fresh reading for {label}. OpenWeather's last report was {round(temp)} degrees Celsius at {observed.strftime('%H:%M UTC')}.",
@@ -417,7 +441,7 @@ def openweather_conditions(loc, lang, key, now=None):
     en, hi = weather_words(wmo) if wmo is not None else ("", "")
     return reply(
         f"OpenWeather reports {round(temp)} degrees Celsius in {label}" + (f", with {en}" if en else "") + ".",
-        f"ओपन वेदर के अनुसार {hi_label} में तापमान {round(temp)} डिग्री सेल्सियस है" + (f" और {hi}" if hi else "") + "।",
+        f"ओपन वेदर के अनुसार {hi_label} का तापमान {round(temp)} डिग्री सेल्सियस है" + (f" और {hi}" if hi else "") + "।",
         lang, source="OpenWeather", observed=observed.isoformat(), topic="weather",
     )
 
@@ -841,7 +865,14 @@ def answer(
                     return clock("UTC", "UTC", lang, bool(d), now)
             if w or (not pat and pending == "weather"):
                 weather_stage = "geocoding"
-            loc = place(city, "hi" if re.search("[\u0900-\u097f]", city) else "en")
+            weather_request = bool(w or (not pat and pending == "weather"))
+            loc = place(city, "hi" if re.search("[\u0900-\u097f]", city) else "en", city_only=weather_request)
+            if loc is _WEATHER_AREA:
+                return reply(
+                    "Weather differs from place to place. Which city would you like?",
+                    "मौसम जगह के हिसाब से बदलता है। किस शहर का मौसम बताऊँ?",
+                    lang, follow="weather",
+                )
             if not loc:
                 return reply(
                     "I could not locate that city. Try its name followed by a comma and the country.",

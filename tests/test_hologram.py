@@ -80,6 +80,33 @@ class Skills(unittest.TestCase):
             self.assertEqual(r["source"], "Open-Meteo")
             self.assertIn("25 degrees", r["text"])
 
+    def test_country_weather_asks_for_city_not_country_midpoint(self):
+        with patch.object(s, "fetch_json", side_effect=AssertionError("must ask before lookup")):
+            for q in ("भारत का मौसम कैसा है", "इंडिया का तापमान कितना है", "पूरे भारत का मौसम",
+                      "weather in India", "नेपाल का मौसम", "weather in France"):
+                with self.subTest(q=q):
+                    r = s.answer(q, "hi-IN", now=NOW)
+                    self.assertEqual(r.get("follow"), "weather")
+                    self.assertIn("किस शहर", r["text"])
+                    self.assertNotIn("डिग्री", r["text"])
+
+    def test_geocoder_country_or_large_region_asks_for_city(self):
+        for feature in ("PCLI", "ADM1", "ADM2", "CONT"):
+            s.place.cache_clear()
+            data = {"results": [{"name":"Somewhere", "country":"Elsewhere", "feature_code":feature,
+                                 "latitude":1.0, "longitude":2.0, "timezone":"UTC"}]}
+            with self.subTest(feature=feature), patch.object(s, "fetch_json", return_value=data):
+                r = s.answer("weather in somewhere", "en", now=NOW)
+                self.assertEqual(r.get("follow"), "weather")
+                self.assertIn("Which city", r["text"])
+
+    def test_delhi_temperature_is_clearly_for_delhi(self):
+        with patch.object(s, "_observation", return_value={"current":{"temperature_2m":17,
+             "weather_code":0,"time":"2026-11-18T10:00"}, "utc_offset_seconds":19800}):
+            r = s.answer("दिल्ली का मौसम कैसा है", "hi-IN", now=NOW)
+            self.assertIn("भारत में नई दिल्ली का तापमान 17", r["text"])
+            self.assertEqual(r["source"], "Open-Meteo")
+
     def test_stale_weather_is_labelled(self):
         with patch.object(
             s,
