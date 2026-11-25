@@ -32,7 +32,7 @@ def calculate(query):
     if dozen:
         n = int(dozen.group(1))
         return True, str(n * 12)
-    math_words = re.search(r'(?<!\w)(?:गुणा|गुना|guna|gunaa|गुने|gunay|times|multiplied|divided|plus|minus|भाग|जोड़|घटाओ)(?!\w)|[+*/×÷%]', q, re.I)
+    math_words = re.search(r'(?<!\w)(?:गुणा|गुना|guna|gunaa|गुने|gunay|times|multiplied|divided|plus|minus|modulo|mod|भाग|जोड़|घटाओ)(?!\w)|[+*/×÷%]', q, re.I)
     if math_words:
         q = re.sub(r'((?:करो|कर|karo|kar))\s+(?:दो|do)$', r'\1', q)
         q = ' '.join(str(_SPOKEN_NUMBERS.get(word, word)) for word in q.split())
@@ -47,13 +47,14 @@ def calculate(query):
         (r'\bdivided by\b|भाग', '/'),
         (r'\bplus\b|जोड़', '+'),
         (r'\bminus\b|घटाओ', '-'),
+        (r'\bmodulo\b|\bmod\b', '%'),
         (r'(?<=\d)\s*[x×]\s*(?=\d)', '*'),
     ]:
         s = re.sub(pattern, replacement, s)
     s = s.replace('÷', '/').strip()
     intent = bool(re.search(r'\d', q) and re.search(
-        r'\b(?:calculate|compute|solve|multiplied|multiply|times|divided|plus|minus)\b|[+*/×÷%]|गुणा|गुना|गुने|\bguna\b|\bgunaa\b|\bgunay\b|भाग|जोड़|घटाओ', q))
-    if not re.fullmatch(r'[0-9.()+*/\s-]+', s) or not re.search(r'[+*/-]', s) or len(s) > 120:
+        r'\b(?:calculate|compute|solve|multiplied|multiply|times|divided|plus|minus|modulo|mod)\b|[+*/×÷%]|गुणा|गुना|गुने|\bguna\b|\bgunaa\b|\bgunay\b|भाग|जोड़|घटाओ', q))
+    if not re.fullmatch(r'[0-9.()+*/%\s-]+', s) or not re.search(r'[+*/%\-]', s) or len(s) > 120:
         return (True, None) if intent else (False, None)
     try:
         tree = ast.parse(s, mode='eval')
@@ -70,12 +71,20 @@ def calculate(query):
                 value = evaluate(node.operand)
                 if isinstance(node.op, ast.USub):
                     value = -value
-            elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div)):
+            elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod)):
                 a, b = evaluate(node.left), evaluate(node.right)
                 if isinstance(node.op, ast.Add): value = a + b
                 elif isinstance(node.op, ast.Sub): value = a - b
                 elif isinstance(node.op, ast.Mult): value = a * b
-                else: value = a / b
+                elif isinstance(node.op, ast.Div): value = a / b
+                else:
+                    # Remainder follows Python floor-mod semantics, only for
+                    # integers; decimal percentages are too ambiguous.
+                    if a != a.to_integral_value() or b != b.to_integral_value():
+                        raise ValueError('integer modulo only')
+                    if not b:
+                        raise ZeroDivisionError('modulo by zero')
+                    value = Decimal(int(a) % int(b))
             else:
                 raise ValueError('unsupported operation')
             if not value.is_finite() or abs(value) > _LIMIT:

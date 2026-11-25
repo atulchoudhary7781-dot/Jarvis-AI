@@ -248,15 +248,23 @@ def weather_words(code):
 
 @lru_cache(maxsize=160)
 def _observation(lat, lon, bucket):
-    return fetch_json(
-        "https://api.open-meteo.com/v1/forecast",
-        {
-            "latitude": lat,
-            "longitude": lon,
-            "current": "temperature_2m,weather_code",
-            "timezone": "auto",
-        },
-    )
+    endpoint = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "current": "temperature_2m,weather_code",
+        "timezone": "auto",
+    }
+    try:
+        return fetch_json(endpoint, params)
+    except HTTPError as exc:
+        if not 500 <= exc.code <= 599:
+            raise  # Don't retry rate limits, bad requests or authentication errors.
+    except (URLError, TimeoutError):
+        pass
+    # One bounded retry for a transient network failure; never fabricate data
+    # or silently present a stale cached observation as current.
+    return fetch_json(endpoint, params)
 
 
 @lru_cache(maxsize=128)
@@ -575,6 +583,57 @@ def wiki(topic, lang):
     )
 
 
+# Only exact country aliases are translated; do not send private conversation
+# or guess an entity from a fuzzy Hindi phrase.
+_CAPITAL_COUNTRIES_HI = {
+    "नेपाल": "Nepal", "भारत": "India", "इंडिया": "India",
+    "जापान": "Japan", "फ्रांस": "France", "फ्राँस": "France",
+    "फ़्रांस": "France", "जर्मनी": "Germany", "ब्राज़ील": "Brazil",
+    "ब्राजील": "Brazil", "ऑस्ट्रेलिया": "Australia", "सिंगापुर": "Singapore",
+}
+
+
+def hindi_capital(q, lang):
+    match = re.fullmatch(
+        r"(?:बताओ\s+)?([\u0900-\u097f]+)\s+की\s+राजधानी\s+(?:क्या\s+है|कौन\s+सी\s+है|बताओ|बताइए)", q
+    )
+    if not match or match.group(1) not in _CAPITAL_COUNTRIES_HI:
+        return None
+    country = _CAPITAL_COUNTRIES_HI[match.group(1)]
+    result = wiki("capital of " + country, "en-IN")
+    city_en = result.get("article") if result.get("article") in HI_CITY else None
+    # Some verified pages are titled "Capital of Japan" rather than "Tokyo".
+    # Translate only a known, exact city at the start of the direct statement.
+    if not city_en and result.get("article"):
+        direct = re.match(
+            r"^According to Wikipedia,\s*(?:the\s+)?(?:current\s+)?capital(?:\s+city)?\s+of\s+(?:the\s+)?"
+            + re.escape(country) + r"\s+is\s+(?:the\s+city\s+of\s+)?(.+)",
+            result.get("text", ""), re.I,
+        )
+        if direct:
+            city_en = next((name for name in sorted(HI_CITY, key=len, reverse=True)
+                            if re.match(re.escape(name) + r"(?![\w])", direct.group(1), re.I)), None)
+    if city_en:
+        return reply(f"According to Wikipedia, the capital of {country} is {city_en}.",
+                     f"विकिपीडिया के अनुसार, {match.group(1)} की राजधानी {HI_CITY[city_en]} है।",
+                     lang, source="Wikipedia", article=result["article"])
+    # wiki() only returns a sourced match or an honest no-result response.
+    if result.get("article"):
+        return result
+    return reply("I could not verify that capital right now.",
+                 "अभी राजधानी की पक्की जानकारी नहीं मिली।", lang, source="Wikipedia")
+
+
+def india_independence(q, lang):
+    # Stable historical fact; use only narrowly specified full questions.
+    if not (re.fullmatch(r"(?:in )?what year did india (?:become independent|gain independence)", q)
+            or re.fullmatch(r"when did india (?:become independent|gain independence)", q)
+            or re.fullmatch(r"भारत (?:को )?(?:आज़ादी|आजादी|स्वतंत्रता) कब (?:मिली|प्राप्त हुई)", q)):
+        return None
+    return reply("India became independent on 15 August 1947.",
+                 "भारत 15 अगस्त 1947 को स्वतंत्र हुआ।", lang, source="local")
+
+
 def ask_provider(q, lang, history, key, model):
     messages = [
         {
@@ -692,6 +751,12 @@ def answer(
                 ("जवाब लगभग " if approximate else "जवाब है ") + number + "।",
                 lang, source="Calculator",
             )
+        history_fact = india_independence(q, lang)
+        if history_fact:
+            return history_fact
+        capital_fact = hindi_capital(q, lang)
+        if capital_fact:
+            return capital_fact
         if w or t or d or (pending == "weather" and q):
             pat = w or t or d
             city = location_hint(q, pat) if pat else q[:110]

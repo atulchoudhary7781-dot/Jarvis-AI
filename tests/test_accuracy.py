@@ -1,6 +1,7 @@
 """Regression tests for arithmetic routing and conservative Wikipedia selection."""
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError, URLError
 from hologram import skills
 from hologram.calculator import calculate
 
@@ -38,11 +39,79 @@ class Accuracy(unittest.TestCase):
             self.assertIn('could not calculate', r['text'])
 
     def test_invalid_math_no_eval_or_wikipedia(self):
-        for q in ('calculate 5 / 0', 'calculate 2 ** 100', 'calculate 9 + __import__("os")', 'calculate 10 % 3'):
+        for q in ('calculate 5 / 0', 'calculate 2 ** 100', 'calculate 9 + __import__("os")', 'calculate 10 % 0', '1.5 modulo 1'):
             with self.subTest(q=q), patch.object(skills, 'wiki', side_effect=AssertionError('wrong route')):
                 r = skills.answer(q, 'en')
                 self.assertEqual(r['source'], 'Calculator')
                 self.assertIn('could not calculate', r['text'])
+
+    def test_modulo_integer_math_and_edges(self):
+        cases = {'What is 17 modulo 5?': '2', '17 mod 5': '2', '17 % 5': '2',
+                 'calculate 10 % 3': '1', '-17 modulo 5': '3', '17 mod -5': '-3',
+                 '१७ modulo ५ कितना है': '2'}
+        with patch.object(skills, 'fetch_json', side_effect=AssertionError('unexpected network')):
+            for q, expected in cases.items():
+                with self.subTest(q=q):
+                    handled, result = calculate(q)
+                    self.assertTrue(handled)
+                    self.assertEqual(result, expected)
+        self.assertEqual(calculate('17 modulo 0'), (True, None))
+        self.assertEqual(calculate('1.5 mod 1'), (True, None))
+
+    def test_india_independence_scoped_without_chat_consent(self):
+        with patch.object(skills, 'fetch_json', side_effect=AssertionError('unexpected network')):
+            for q in ('In what year did India become independent?', 'When did India become independent?',
+                      'भारत को आजादी कब मिली?'):
+                result = skills.answer(q, 'hi-IN')
+                self.assertEqual(result['source'], 'local')
+                self.assertIn('1947', result['text'])
+            self.assertIsNone(skills.india_independence('when did nepal become independent', 'en'))
+
+    def test_hindi_nepal_capital_uses_verified_wiki_city(self):
+        data = {'query': {'pages': [
+            {'index': 1, 'title': 'Capital punishment in Nepal', 'extract': 'Capital punishment in Nepal has been abolished.'},
+            {'index': 2, 'title': 'Kathmandu', 'extract': 'Kathmandu is the capital and largest city of Nepal.'},
+        ]}}
+        with patch.object(skills, 'fetch_json', return_value=data) as fetch:
+            result = skills.answer('नेपाल की राजधानी क्या है?', 'hi-IN')
+            self.assertEqual(result['source'], 'Wikipedia')
+            self.assertIn('काठमांडू', result['text'])
+            self.assertEqual(result['article'], 'Kathmandu')
+            self.assertEqual(fetch.call_args.args[1]['gsrsearch'], 'capital of Nepal')
+
+    def test_hindi_capital_direct_title_is_translated_only_if_verified(self):
+        data = {'query': {'pages': [{'index': 1, 'title': 'Capital of Japan',
+                                    'extract': 'The capital of Japan is Tokyo.'}]}}
+        with patch.object(skills, 'fetch_json', return_value=data):
+            result = skills.answer('जापान की राजधानी क्या है?', 'hi-IN')
+            self.assertIn('टोक्यो', result['text'])
+            self.assertEqual(result['lang'], 'hi-IN')
+
+    def test_hindi_capital_not_guessed_when_unverified(self):
+        data = {'query': {'pages': [{'index': 1, 'title': 'Kathmandu', 'extract': 'Kathmandu is a city in Nepal.'}]}}
+        with patch.object(skills, 'fetch_json', return_value=data):
+            result = skills.answer('नेपाल की राजधानी क्या है?', 'hi-IN')
+            self.assertNotIn('काठमांडू', result['text'])
+            self.assertIn('पक्की जानकारी नहीं मिली', result['text'])
+        self.assertIsNone(skills.hindi_capital('नेपाल की राजधानी पर कहानी सुनाओ', 'hi'))
+
+    def test_weather_retry_is_bounded_and_does_not_guess(self):
+        skills._observation.cache_clear()
+        with patch.object(skills, 'fetch_json', side_effect=[URLError('timeout'), {'current': {'temperature_2m': 25}}]) as fetch:
+            self.assertEqual(skills._observation(28.6, 77.2, 123)['current']['temperature_2m'], 25)
+            self.assertEqual(fetch.call_count, 2)
+        skills._observation.cache_clear()
+        with patch.object(skills, 'fetch_json', side_effect=URLError('timeout')) as fetch:
+            with self.assertRaises(URLError):
+                skills._observation(28.6, 77.2, 123)
+            self.assertEqual(fetch.call_count, 2)
+        skills._observation.cache_clear()
+        rate_limit = HTTPError('https://api.open-meteo.com', 429, 'limited', None, None)
+        with patch.object(skills, 'fetch_json', side_effect=rate_limit) as fetch:
+            with self.assertRaises(HTTPError):
+                skills._observation(28.6, 77.2, 123)
+            self.assertEqual(fetch.call_count, 1)
+        skills._observation.cache_clear()
 
     def test_fractional_results_are_not_presented_as_exact(self):
         self.assertIn('approximately', skills.answer('1 / 3', 'en')['text'])

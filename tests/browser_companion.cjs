@@ -3,6 +3,8 @@
 const assert = require("node:assert/strict");
 const { chromium } = require("playwright");
 function fixture() {
+  // This scenario explicitly starts the mic with Space.
+  localStorage.setItem("amber:mic-on-open", "off");
   const x = (window.friendQA = { active: null, starts: 0, overlap: 0, u: null, drafts: [] });
   window.SpeechRecognition = class {
     start() {
@@ -81,6 +83,7 @@ function fixture() {
       const shelf = p.waitForResponse((r) => r.url().endsWith("/api/community-skills"));
       await load();
       assert.equal((await (await shelf).json()).version, 1);
+      await p.evaluate(() => localStorage.removeItem("amber:mic-on-open"));
       await p.keyboard.press("Space");
       await wait(() => friendQA.active);
     };

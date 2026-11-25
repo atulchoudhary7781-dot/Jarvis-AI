@@ -5,6 +5,8 @@
 const assert = require("node:assert/strict");
 const { chromium } = require("playwright");
 function installFixture() {
+  // This regression exercises explicit one-gesture activation, not auto-start.
+  localStorage.setItem("amber:mic-on-open", "off");
   const x = (window.voiceTest = { starts: 0, stops: 0, active: null, spoken: [], overlap: 0, utterance: null });
   window.SpeechRecognition = class {
     start() {
