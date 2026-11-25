@@ -7,6 +7,21 @@ from decimal import Decimal, DivisionByZero, InvalidOperation, localcontext
 
 _LIMIT = Decimal('1000000000000')
 
+# Common short forms returned by Hindi/English speech recognition. Do not try
+# to infer arbitrary long number phrases: unsupported input should fail closed.
+_SPOKEN_NUMBERS = {
+    'शून्य': 0, 'जीरो': 0, 'zero': 0,
+    'एक': 1, 'दो': 2, 'तीन': 3, 'चार': 4, 'पांच': 5, 'पाँच': 5,
+    'छह': 6, 'सात': 7, 'आठ': 8, 'नौ': 9, 'दस': 10,
+    'ग्यारह': 11, 'बारह': 12, 'तेरह': 13, 'चौदह': 14, 'पंद्रह': 15,
+    'पन्द्रह': 15, 'सोलह': 16, 'सत्रह': 17, 'सतरह': 17, 'अठारह': 18,
+    'उन्नीस': 19, 'बीस': 20, 'इक्कीस': 21, 'बाईस': 22, 'तेईस': 23,
+    'तेइस': 23, 'चौबीस': 24, 'पच्चीस': 25, 'छब्बीस': 26, 'सत्ताईस': 27,
+    'अट्ठाईस': 28, 'उनतीस': 29, 'तीस': 30,
+    'satrah': 17, 'satarah': 17, 'satra': 17, 'teis': 23, 'teees': 23,
+    'teiss': 23,
+}
+
 
 def calculate(query):
     """Return (handled, text). Unsupported input is never passed to eval()."""
@@ -17,10 +32,18 @@ def calculate(query):
     if dozen:
         n = int(dozen.group(1))
         return True, str(n * 12)
+    math_words = re.search(r'(?<!\w)(?:गुणा|गुना|guna|gunaa|गुने|gunay|times|multiplied|divided|plus|minus|भाग|जोड़|घटाओ)(?!\w)|[+*/×÷%]', q, re.I)
+    if math_words:
+        q = re.sub(r'((?:करो|कर|karo|kar))\s+(?:दो|do)$', r'\1', q)
+        q = ' '.join(str(_SPOKEN_NUMBERS.get(word, word)) for word in q.split())
+    # A common natural Hindi construction: 17 ko 23 se guna karo.
+    natural = re.fullmatch(r'(\d+(?:\.\d+)?)\s+(?:को|ko)\s+(\d+(?:\.\d+)?)\s+(?:से|se)\s+(?:गुणा|गुना|guna|gunaa)\s+(?:करो|कर|karo|kar)(?:\s+(?:दो|do))?', q)
+    if natural:
+        q = natural.group(1) + ' * ' + natural.group(2)
     s = re.sub(r'^(?:please\s+)?(?:what is|what\'s|calculate|compute|solve|कितना है|गणना करो)\s+', '', q)
-    s = re.sub(r'\s+(?:कितना है|कितने हैं|क्या है|बताओ|calculate)$', '', s)
+    s = re.sub(r'\s+(?:कितना है|कितना होता है|कितना होगा|कितने हैं|क्या है|क्या होगा|बताओ|kitna hai|kitna hota hai|kitna hoga|calculate)$', '', s)
     for pattern, replacement in [
-        (r'\bmultiplied by\b|\btimes\b|\bmultiply by\b|गुणा', '*'),
+        (r'\bmultiplied by\b|\btimes\b|\bmultiply by\b|\bguna\b|\bgunaa\b|\bgunay\b|गुणा|गुना|गुने', '*'),
         (r'\bdivided by\b|भाग', '/'),
         (r'\bplus\b|जोड़', '+'),
         (r'\bminus\b|घटाओ', '-'),
@@ -29,7 +52,7 @@ def calculate(query):
         s = re.sub(pattern, replacement, s)
     s = s.replace('÷', '/').strip()
     intent = bool(re.search(r'\d', q) and re.search(
-        r'\b(?:calculate|compute|solve|multiplied|multiply|times|divided|plus|minus)\b|[+*/×÷%]|गुणा|भाग|जोड़|घटाओ', q))
+        r'\b(?:calculate|compute|solve|multiplied|multiply|times|divided|plus|minus)\b|[+*/×÷%]|गुणा|गुना|गुने|\bguna\b|\bgunaa\b|\bgunay\b|भाग|जोड़|घटाओ', q))
     if not re.fullmatch(r'[0-9.()+*/\s-]+', s) or not re.search(r'[+*/-]', s) or len(s) > 120:
         return (True, None) if intent else (False, None)
     try:

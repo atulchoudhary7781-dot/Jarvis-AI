@@ -16,6 +16,27 @@ class Accuracy(unittest.TestCase):
                     self.assertEqual(r['source'], 'Calculator')
                     self.assertIn(expected, r['text'])
 
+    def test_spoken_transcripts_reach_calculator(self):
+        cases = (
+            'सत्रह गुणा तेईस कितना है', 'सत्रह गुना तेइस कितना होता है',
+            '17 guna 23 kitna hai', 'satrah guna teis kitna hai',
+            '17 को 23 से गुणा करो', '१७ ko २३ se guna karo',
+            'सत्रह को तेईस से गुणा कर दो', '17 को 23 से गुणा करो दो',
+            'जार्विस सत्रह गुणा तेईस कितना है',
+        )
+        with patch.object(skills, 'fetch_json', side_effect=AssertionError('unexpected network')):
+            for q in cases:
+                with self.subTest(q=q):
+                    r = skills.answer(q, 'hi-IN')
+                    self.assertEqual(r['source'], 'Calculator')
+                    self.assertIn('391', r['text'])
+
+    def test_unsupported_spoken_expression_never_guesses(self):
+        with patch.object(skills, 'wiki', side_effect=AssertionError('unexpected wiki')):
+            r = skills.answer('17 guna unknown kitna hai', 'en')
+            self.assertEqual(r['source'], 'Calculator')
+            self.assertIn('could not calculate', r['text'])
+
     def test_invalid_math_no_eval_or_wikipedia(self):
         for q in ('calculate 5 / 0', 'calculate 2 ** 100', 'calculate 9 + __import__("os")', 'calculate 10 % 3'):
             with self.subTest(q=q), patch.object(skills, 'wiki', side_effect=AssertionError('wrong route')):
