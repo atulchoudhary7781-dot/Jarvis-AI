@@ -113,6 +113,18 @@ class Accuracy(unittest.TestCase):
             self.assertEqual(fetch.call_count, 1)
         skills._observation.cache_clear()
 
+    def test_weather_error_diagnostic_has_no_query_location_or_secret(self):
+        secret = 'private-secret'
+        error = HTTPError('https://example.invalid/?key=' + secret, 429, 'error ' + secret, None, None)
+        with patch.object(skills, '_observation', side_effect=error):
+            with self.assertLogs('jarvis.weather', level='WARNING') as logs:
+                result = skills.answer('weather in Delhi', 'en')
+        self.assertEqual(result['source'], 'unavailable')
+        text = ' '.join(logs.output)
+        self.assertIn('stage=forecast category=http_429', text)
+        for data in (secret, 'Delhi', '28.614', 'example.invalid'):
+            self.assertNotIn(data, text)
+
     def test_fractional_results_are_not_presented_as_exact(self):
         self.assertIn('approximately', skills.answer('1 / 3', 'en')['text'])
         self.assertIn('0.000000000001', skills.answer('1 / 1000000000000', 'en')['text'])

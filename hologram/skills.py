@@ -7,6 +7,7 @@ loaded. Provider destinations are constants, never command parameters.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import re
@@ -710,6 +711,7 @@ def answer(
     ):
         pending = ""
     source = "lookup"
+    weather_stage = ""
     try:
         broad_news = (
             re.fullmatch(
@@ -788,6 +790,8 @@ def answer(
                     )
                 except (ValueError, ZoneInfoNotFoundError):
                     return clock("UTC", "UTC", lang, bool(d), now)
+            if w or (not pat and pending == "weather"):
+                weather_stage = "geocoding"
             loc = place(city, "hi" if re.search("[\u0900-\u097f]", city) else "en")
             if not loc:
                 return reply(
@@ -797,6 +801,7 @@ def answer(
                 )
             if w or (not pat and pending == "weather"):
                 source = "Open-Meteo"
+                weather_stage = "forecast"
                 return conditions(loc, lang, now)
             return clock(loc[2], loc[0], lang, bool(d), now)
         if re.search(
@@ -888,7 +893,23 @@ def answer(
         TypeError,
         AttributeError,
         ZoneInfoNotFoundError,
-    ):
+    ) as exc:
+        if weather_stage:
+            # Diagnostics intentionally exclude queries, locations, URLs,
+            # IP addresses, exception messages and any credentials.
+            if isinstance(exc, HTTPError):
+                category = "http_" + str(exc.code) if 100 <= exc.code <= 599 else "http_error"
+            elif isinstance(exc, TimeoutError):
+                category = "timeout"
+            elif isinstance(exc, URLError):
+                category = "timeout" if isinstance(exc.reason, TimeoutError) else "network_error"
+            elif isinstance(exc, OSError):
+                category = "network_error"
+            else:
+                category = "invalid_response"
+            logging.getLogger("jarvis.weather").warning(
+                "Weather failure: stage=%s category=%s", weather_stage, category
+            )
         if source == "OpenRouter":
             return reply(
                 "The private AI service is unavailable. Check the server key, model and balance. Time, weather and public lookups are separate.",
