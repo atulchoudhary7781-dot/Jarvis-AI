@@ -47,6 +47,36 @@ class Accuracy(unittest.TestCase):
             self.assertNotIn('Irrelevant', r['text'])
             self.assertIn('could not find', r['text'])
 
+    def test_capital_punishment_never_mistaken_for_a_city(self):
+        data = {'query': {'pages': [
+            {'index': 1, 'title': 'Capital punishment in France', 'extract': 'Capital punishment in France is banned.'},
+            {'index': 2, 'title': 'Paris', 'extract': 'Paris is the capital and largest city of France.'},
+        ]}}
+        with patch.object(skills, 'fetch_json', return_value=data):
+            r = skills.answer('What is the capital of France?', 'en')
+            self.assertEqual(r['article'], 'Paris')
+            self.assertIn('Paris', r['text'])
+            self.assertNotIn('punishment', r['text'])
+
+    def test_capital_does_not_fabricate_when_no_safe_match(self):
+        data = {'query': {'pages': [{'index': 1, 'title': 'Capital punishment in France',
+                                     'extract': 'Capital punishment in France is banned.'}]}}
+        with patch.object(skills, 'fetch_json', return_value=data):
+            r = skills.answer('What is the capital of France?', 'en')
+            self.assertNotIn('punishment', r['text'])
+            self.assertIn('could not find', r['text'])
+
+    def test_capital_other_direct_forms(self):
+        match = skills.capital_article_matches
+        self.assertTrue(match('capital of japan', 'Capital of Japan', 'The capital of Japan is Tokyo.'))
+        self.assertTrue(match('capital of germany', 'Capital of Germany', 'The capital of Germany is the city of Berlin.'))
+        self.assertTrue(match('capital of brazil', 'Brasília', 'Brasília (pronounced here) is the capital city of Brazil.'))
+        self.assertTrue(match('capital of india', 'New Delhi', 'New Delhi is the capital and a city of India.'))
+        self.assertFalse(match('capital of france', 'Capital punishment in France', 'Capital punishment in France is banned.'))
+        self.assertFalse(match('capital of france', 'Capital of France', 'Capital punishment in France is banned.'))
+        self.assertFalse(match('capital of france', 'Paris', 'Paris is the capital of Germany.'))
+        self.assertIsNone(match('capital punishment in france', 'Capital punishment in France', 'Text'))
+
     def test_title_matching_hindi_and_capital(self):
         self.assertTrue(skills.wiki_title_matches('चंद्रयान', 'चंद्रयान'))
         self.assertTrue(skills.wiki_title_matches('capital of japan', 'Capital of Japan'))

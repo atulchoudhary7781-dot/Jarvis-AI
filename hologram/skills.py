@@ -502,6 +502,35 @@ def wiki_title_matches(topic, title):
     return bool(wanted) and all(word in found for word in wanted)
 
 
+
+def capital_article_matches(topic, title, text):
+    """Accept only a direct, present-tense capital statement from the right page.
+
+    Search rankings alone can mistake capital punishment for capital cities.
+    When the source does not clearly state the relation, return no answer.
+    """
+    match = re.fullmatch(r"(?:the\s+)?capital\s+of\s+(?:the\s+)?([\w\s'-]{1,80})", topic, re.I)
+    if not match:
+        return None  # Not a capital-city question.
+    country = re.escape(match.group(1).strip())
+    title = str(title).strip()
+    text = " ".join(str(text).split())
+    if not title or not text:
+        return False
+    direct_title = re.fullmatch(r"(?:the\s+)?capital\s+of\s+(?:the\s+)?" + country, title, re.I)
+    if direct_title and re.search(
+        r"\b(?:the\s+)?(?:current\s+)?capital(?:\s+city)?\s+of\s+(?:the\s+)?"
+        + country + r"\s+is\s+(?:the\s+city\s+of\s+)?[\w]", text, re.I
+    ):
+        return True
+    # A city page must begin by saying that that city is the country's capital.
+    return bool(re.search(
+        r"^" + re.escape(title) + r"(?:\s*\([^)]{0,180}\))?\s+is\s+the\s+capital"
+        r"(?:\s+city|\s+and\s+(?:(?:the\s+)?(?:largest|most populous)|a)\s+city)?"
+        r"\s+of\s+(?:the\s+)?" + country + r"(?![\w])", text, re.I
+    ))
+
+
 def wiki(topic, lang):
     langs = (
         ("hi", "en") if lang.startswith("hi") and re.search(r"[\u0900-\u097f]", topic) else ("en",)
@@ -513,7 +542,7 @@ def wiki(topic, lang):
             "formatversion": 2,
             "generator": "search",
             "gsrsearch": topic,
-            "gsrlimit": 5,
+            "gsrlimit": 10 if re.fullmatch(r"(?:the\s+)?capital\s+of\s+(?:the\s+)?[\w\s'-]{1,80}", topic, re.I) else 5,
             "gsrnamespace": 0,
             "prop": "extracts",
             "exintro": 1,
@@ -523,7 +552,9 @@ def wiki(topic, lang):
         data = fetch_json(f"https://{db}.wikipedia.org/w/api.php", params)
         for row in sorted(data.get("query", {}).get("pages", []), key=lambda r: r.get("index", 99)):
             text = " ".join(str(row.get("extract", "")).split())
-            if text and wiki_title_matches(topic, row.get("title", "")):
+            capital_match = capital_article_matches(topic, row.get("title", ""), text)
+            # Capital queries need stronger evidence than shared title words.
+            if text and (capital_match if capital_match is not None else wiki_title_matches(topic, row.get("title", ""))):
                 # Speech should stop at a word, preferably a sentence boundary.
                 if len(text) > 530:
                     cut = text[:525].rsplit(" ", 1)[0]
