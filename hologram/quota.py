@@ -69,3 +69,35 @@ def reserve(url, token, client_ip, weight, *, opener=None):
         return type(result.get('result')) is int and result['result'] == 1
     except (OSError, ValueError, TypeError, AttributeError, UnicodeError):
         return False
+
+
+# Independent budgets protect the weather key even when many Vercel instances
+# are running; never reuse the voice budget or store raw IP addresses.
+WEATHER_DAILY = 1000
+WEATHER_MINUTE = 25
+WEATHER_CLIENT_MINUTE = 5
+
+
+def reserve_weather(url, token, client_ip, *, opener=None):
+    if not valid_config(url, token):
+        return False
+    try:
+        address = str(ipaddress.ip_address(client_ip))
+        digest = hmac.new(token.encode(), address.encode(), hashlib.sha256).hexdigest()
+        keys = ['jarvis:weather:daily', 'jarvis:weather:minute', 'jarvis:weather:client:' + digest]
+        cmd = ['EVAL', LUA, '3', *keys, '1', str(WEATHER_DAILY),
+               str(WEATHER_MINUTE), str(WEATHER_CLIENT_MINUTE)]
+        endpoint = url.rstrip('/')
+        req = urllib.request.Request(endpoint, json.dumps(cmd).encode(),
+            headers={'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}, method='POST')
+        client = opener or urllib.request.build_opener(NoRedirect())
+        with client.open(req, timeout=4) as response:
+            if response.status != 200 or response.geturl().rstrip('/') != endpoint:
+                return False
+            data = response.read(4097)
+        if len(data) > 4096:
+            return False
+        result = json.loads(data)
+        return type(result.get('result')) is int and result['result'] == 1
+    except (OSError, ValueError, TypeError, AttributeError, UnicodeError):
+        return False

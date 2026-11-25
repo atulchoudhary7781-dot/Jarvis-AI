@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 from . import voice, groq_speech, quota
 from .catalog import Catalog
-from .skills import MAX_QUERY, RateLimit, answer, reply
+from .skills import MAX_QUERY, RateLimit, answer, reply, openweather_conditions
 
 UI = Path(__file__).parent / "ui" / "index.html"
 
@@ -32,6 +32,8 @@ def make_server(port=8765, *, preview=False, desktop=None):
     if not (redis_url and redis_token):
         redis_url = os.environ.get("UPSTASH_REDIS_REST_URL", "")
         redis_token = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
+    weather_key = os.environ.get("OPENWEATHER_API_KEY", "")
+    weather_enabled = bool(re.fullmatch(r"[A-Za-z0-9]{16,128}", weather_key) and quota.valid_config(redis_url, redis_token))
     vercel_env = os.environ.get("VERCEL_ENV", "")
     quota_test = vercel_env == "preview" and os.environ.get("JARVIS_GROQ_QUOTA_TEST") == "1"
     guarded = (vercel_env == "production" and os.environ.get("JARVIS_GROQ_PUBLIC") == "1") or quota_test
@@ -257,6 +259,14 @@ def make_server(port=8765, *, preview=False, desktop=None):
                     reply("A little too fast. Please wait a moment.", "थोड़ा रुककर फिर पूछिए।", lang),
                 )
             try:
+                def weather_backup(loc, language, now):
+                    client_ip = self.headers.get("x-vercel-forwarded-for", "") if preview else self.client_address[0]
+                    if not weather_enabled or not quota.reserve_weather(redis_url, redis_token, client_ip):
+                        return reply("Weather backup is temporarily unavailable. Please try again later.",
+                                     "मौसम की बैकअप सेवा अभी उपलब्ध नहीं है। थोड़ी देर बाद पूछिए।",
+                                     language, source="unavailable")
+                    return openweather_conditions(loc, language, weather_key, now)
+
                 result = answer(
                     q,
                     lang,
@@ -264,6 +274,7 @@ def make_server(port=8765, *, preview=False, desktop=None):
                     pending=req.get("pending", ""),
                     history=history,
                     chat_terms=req.get("chatTerms"),
+                    weather_fallback=weather_backup if weather_enabled else None,
                     key=ai_key,
                     search_key=search_key,
                     model=model,

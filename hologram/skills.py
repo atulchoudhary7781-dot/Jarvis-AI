@@ -38,6 +38,7 @@ AGENT = (
 DESTINATIONS = {
     "https://geocoding-api.open-meteo.com/v1/search",
     "https://api.open-meteo.com/v1/forecast",
+    "https://api.openweathermap.org/data/2.5/weather",
     "https://en.wikipedia.org/w/api.php",
     "https://hi.wikipedia.org/w/api.php",
     "https://openrouter.ai/api/v1/chat/completions",
@@ -374,6 +375,53 @@ def conditions(loc, lang, now=None):
     )
 
 
+def openweather_conditions(loc, lang, key, now=None):
+    """Current-weather backup; call only after the shared quota is reserved."""
+    if not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9]{16,128}", key):
+        raise ValueError("Invalid weather configuration")
+    name, country, _, lat, lon = loc
+    data = fetch_json("https://api.openweathermap.org/data/2.5/weather", {
+        "lat": lat, "lon": lon, "units": "metric", "appid": key,
+    })
+    temp = float(data["main"]["temp"])
+    stamp = float(data["dt"])
+    if not (math.isfinite(temp) and -100 <= temp <= 65 and math.isfinite(stamp)):
+        raise ValueError("Invalid weather measurement")
+    current_stamp = (now or datetime.now(timezone.utc)).timestamp()
+    if not 0 <= stamp <= current_stamp + 300:
+        raise ValueError("Invalid weather timestamp")
+    observed = datetime.fromtimestamp(stamp, timezone.utc)
+    age = current_stamp - stamp
+    label = name if not country or name == country else f"{name}, {country}"
+    hi_label = HI_CITY.get(name, name)
+    if country and name != country:
+        hi_label += ", " + HI_COUNTRY.get(country, country)
+    if age > 4 * 3600:
+        return reply(
+            f"I do not have a fresh reading for {label}. OpenWeather's last report was {round(temp)} degrees Celsius at {observed.strftime('%H:%M UTC')}.",
+            f"{hi_label} का ताज़ा मौसम नहीं मिला। ओपन वेदर की पिछली रिपोर्ट {observed.strftime('%H:%M UTC')} की है: {round(temp)} डिग्री सेल्सियस।",
+            lang, source="OpenWeather", observed=observed.isoformat(), topic="weather",
+        )
+    # Speak only well-defined, whitelisted weather groups, never arbitrary
+    # provider text. If no reliable condition is provided, say temperature only.
+    rows = data.get("weather")
+    code = rows[0].get("id") if isinstance(rows, list) and rows and isinstance(rows[0], dict) else None
+    if type(code) is not int:
+        code = None
+    wmo = (95 if code is not None and 200 <= code <= 299 else
+           51 if code is not None and 300 <= code <= 399 else
+           61 if code is not None and 500 <= code <= 599 else
+           71 if code is not None and 600 <= code <= 699 else
+           45 if code == 741 else 0 if code == 800 else
+           1 if code in (801, 802) else 3 if code in (803, 804) else None)
+    en, hi = weather_words(wmo) if wmo is not None else ("", "")
+    return reply(
+        f"OpenWeather reports {round(temp)} degrees Celsius in {label}" + (f", with {en}" if en else "") + ".",
+        f"ओपन वेदर के अनुसार {hi_label} में तापमान {round(temp)} डिग्री सेल्सियस है" + (f" और {hi}" if hi else "") + "।",
+        lang, source="OpenWeather", observed=observed.isoformat(), topic="weather",
+    )
+
+
 NEWS_FEEDS = {
     "en": "https://feeds.bbci.co.uk/news/world/rss.xml",
     "hi": "https://feeds.bbci.co.uk/hindi/rss.xml",
@@ -675,6 +723,7 @@ def answer(
     model="openrouter/auto",
     now=None,
     chat_terms=None,
+    weather_fallback=None,
 ):
     lang = "hi-IN" if str(language).startswith("hi") else "en-IN"
     if not isinstance(query, str) or not 0 < len(query.strip()) <= MAX_QUERY:
@@ -802,7 +851,15 @@ def answer(
             if w or (not pat and pending == "weather"):
                 source = "Open-Meteo"
                 weather_stage = "forecast"
-                return conditions(loc, lang, now)
+                try:
+                    return conditions(loc, lang, now)
+                except HTTPError as exc:
+                    if exc.code != 429 or weather_fallback is None:
+                        raise
+                    # A 429 is not retried at Open-Meteo. The server-controlled
+                    # backup enforces a shared quota before using a secret.
+                    weather_stage = "backup"
+                    return weather_fallback(loc, lang, now)
             return clock(loc[2], loc[0], lang, bool(d), now)
         if re.search(
             r"^(?:pay|transfer money|send money|delete files|run shell|execute command|payment karo|पैसे भेज|भुगतान कर)",
