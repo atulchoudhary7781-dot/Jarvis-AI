@@ -13,6 +13,7 @@ import re
 import threading
 import time
 import zipfile
+import unicodedata
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from functools import lru_cache
@@ -25,6 +26,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from xml.etree import ElementTree as ET
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from .calculator import calculate
 from .chat import TERMS
 from .chat import engine as companion
 
@@ -471,7 +473,7 @@ def public_search(topic, lang, token):
 
 def get_topic(q):
     q = re.sub(
-        r"^(?:(?:please|ज़रा|कृपया)\s+)?(?:search(?:\s+wikipedia)?(?:\s+for)?|look\s*up|wikipedia(?:\s+(?:par|pe|पर))?|tell me about|who (?:is|was|are)|what (?:is|was|are)|explain|बताओ|विकिपीडिया(?:\s+पर)?|मुझे)\s+",
+        r"^(?:(?:please|ज़रा|कृपया)\s+)?(?:search(?:\s+wikipedia)?(?:\s+for)?|look\s*up|wikipedia\s+search(?:\s+for)?|wikipedia(?:\s+(?:par|pe|पर))?|tell me about|who (?:is|was|are)|what (?:is|was|are)|explain|बताओ|विकिपीडिया(?:\s+पर)?|मुझे)\s+",
         "",
         q,
         flags=re.I,
@@ -482,6 +484,22 @@ def get_topic(q):
         q,
         flags=re.I,
     ).strip(" ?!.।")[:180]
+
+
+def wiki_title_matches(topic, title):
+    """Reject unrelated search hits instead of presenting them as answers.
+
+    Conservative title matching favors a clear refusal over confident nonsense;
+    aliases or paraphrases may require a more specific user query.
+    """
+    def words(text):
+        text = unicodedata.normalize("NFKC", str(text)).casefold()
+        chars = (c if c.isalnum() or unicodedata.category(c).startswith("M") else " " for c in text)
+        return [w for w in "".join(chars).split() if len(w) > 1]
+    stop = {"the", "a", "an", "of", "in", "on", "for", "is", "are", "was", "were", "who", "what"}
+    wanted = [w for w in words(topic) if w not in stop]
+    found = set(words(title))
+    return bool(wanted) and all(word in found for word in wanted)
 
 
 def wiki(topic, lang):
@@ -495,7 +513,7 @@ def wiki(topic, lang):
             "formatversion": 2,
             "generator": "search",
             "gsrsearch": topic,
-            "gsrlimit": 2,
+            "gsrlimit": 5,
             "gsrnamespace": 0,
             "prop": "extracts",
             "exintro": 1,
@@ -505,7 +523,7 @@ def wiki(topic, lang):
         data = fetch_json(f"https://{db}.wikipedia.org/w/api.php", params)
         for row in sorted(data.get("query", {}).get("pages", []), key=lambda r: r.get("index", 99)):
             text = " ".join(str(row.get("extract", "")).split())
-            if text:
+            if text and wiki_title_matches(topic, row.get("title", "")):
                 # Speech should stop at a word, preferably a sentence boundary.
                 if len(text) > 530:
                     cut = text[:525].rsplit(" ", 1)[0]
@@ -628,6 +646,21 @@ def answer(
             source = "Brave Search"
             topic = re.sub(r"\s+(?:dhundo|khojo|खोजो|ढूँढो|ढूंढो)$", "", web[1])
             return public_search(topic, lang, search_key)
+        handled, result = calculate(q)
+        if handled:
+            if result is None:
+                return reply(
+                    "I could not calculate that safely. Try a simple expression, such as 17 times 23.",
+                    "मैं इसे गणना नहीं कर पाया। 17 गुणा 23 जैसा सरल सवाल पूछिए।",
+                    lang, source="Calculator",
+                )
+            approximate = result.startswith("~")
+            number = result.lstrip("~")
+            return reply(
+                ("The answer is approximately " if approximate else "The answer is ") + number + ".",
+                ("जवाब लगभग " if approximate else "जवाब है ") + number + "।",
+                lang, source="Calculator",
+            )
         if w or t or d or (pending == "weather" and q):
             pat = w or t or d
             city = location_hint(q, pat) if pat else q[:110]

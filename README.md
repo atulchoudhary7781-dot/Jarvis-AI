@@ -27,6 +27,7 @@ The microphone is released while JARVIS is thinking or speaking. If automatic pl
 | Website opening | Say **“Open YouTube”**, **“Open Google Maps”**, or **“Search YouTube for music.”** Review the displayed destination and tap its button to open it. |
 | Local computer apps | An optional private session can request Calculator, Notepad and Paint on Windows, or Calculator and TextEdit on macOS, after native approval. See [Local app control](#local-app-control-experimental). |
 | Public information | Ask for a city clock or date, weather, world headlines, or a Wikipedia search. Availability depends on the upstream services. |
+| Basic arithmetic | Ask “What is 17 multiplied by 23?” or “१७ गुणा २३ कितना है?” Simple +, −, × and ÷ expressions are calculated locally; unsupported expressions are not guessed. |
 | Timers and view controls | Say **“Set a timer for five minutes,”** **“Cancel timer,”** **“Zoom in,”** or **“Reset view.”** Timers last only while the tab remains open. |
 | Personal shortcuts | Teach a reviewed routine or quiz, confirm it, and run it later by name. Shortcuts are stored in the current browser profile. |
 | Community skills | Say **“Community skills”** to discover reviewed examples such as **“City duet”** and **“Planet pop quiz.”** |

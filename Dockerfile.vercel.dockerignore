@@ -9,6 +9,7 @@
 hologram/*
 !hologram/__init__.py
 !hologram/skills.py
+!hologram/calculator.py
 !hologram/server.py
 !hologram/groq_speech.py
 !hologram/quota.py
