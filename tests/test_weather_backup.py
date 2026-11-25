@@ -93,6 +93,7 @@ class WeatherHttp(unittest.TestCase):
                     self.assertEqual(provider.call_count,calls)
                     self.assertEqual(r['source'],'OpenWeather' if calls else 'unavailable')
                     self.assertNotIn(TEST_KEY,raw)
+                    if not with_redis: self.assertIn('backup is temporarily unavailable', r['text'])
                     self.assertEqual(reserve.call_count,1 if with_redis else 0)
                 finally: server.shutdown();server.server_close();t.join()
 

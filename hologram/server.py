@@ -33,7 +33,8 @@ def make_server(port=8765, *, preview=False, desktop=None):
         redis_url = os.environ.get("UPSTASH_REDIS_REST_URL", "")
         redis_token = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
     weather_key = os.environ.get("OPENWEATHER_API_KEY", "")
-    weather_enabled = bool(re.fullmatch(r"[A-Za-z0-9]{16,128}", weather_key) and quota.valid_config(redis_url, redis_token))
+    weather_key_present = bool(re.fullmatch(r"[A-Za-z0-9]{16,128}", weather_key))
+    weather_enabled = bool(weather_key_present and quota.valid_config(redis_url, redis_token))
     vercel_env = os.environ.get("VERCEL_ENV", "")
     quota_test = vercel_env == "preview" and os.environ.get("JARVIS_GROQ_QUOTA_TEST") == "1"
     guarded = (vercel_env == "production" and os.environ.get("JARVIS_GROQ_PUBLIC") == "1") or quota_test
@@ -274,7 +275,7 @@ def make_server(port=8765, *, preview=False, desktop=None):
                     pending=req.get("pending", ""),
                     history=history,
                     chat_terms=req.get("chatTerms"),
-                    weather_fallback=weather_backup if weather_enabled else None,
+                    weather_fallback=weather_backup if weather_key_present else None,
                     key=ai_key,
                     search_key=search_key,
                     model=model,
