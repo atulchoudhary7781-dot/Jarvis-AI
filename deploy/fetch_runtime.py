@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 ROOT = "https://raw.githubusercontent.com/atulchoudhary7781-dot/Jarvis-AI/"
-FILES = """community/skills.json deploy/prepare_chat.py hologram/__init__.py hologram/calculator.py hologram/catalog.py hologram/chat.py hologram/groq_speech.py hologram/quota.py hologram/licenses/Notice.txt hologram/licenses/gemma-TERMS.txt hologram/licenses/kokoro-VOICE-NOTICE.md hologram/licenses/tzdata-LICENSE.txt hologram/licenses/tzdata-LICENSE_APACHE.txt hologram/server.py hologram/skills.py hologram/ui/index.html hologram/voice.py hologram/zones.zip launch_hologram.py requirements-chat.txt requirements-voice.txt vercel_host.py""".split()
+FILES = """community/skills.json deploy/prepare_chat.py hologram/__init__.py hologram/calculator.py hologram/catalog.py hologram/chat.py hologram/groq_speech.py hologram/quota.py hologram/licenses/Notice.txt hologram/licenses/noise-suppressor-MIT.txt hologram/licenses/rnnoise-BSD.txt hologram/licenses/rnnoise-wasm-APACHE.txt hologram/licenses/gemma-TERMS.txt hologram/licenses/kokoro-VOICE-NOTICE.md hologram/licenses/tzdata-LICENSE.txt hologram/licenses/tzdata-LICENSE_APACHE.txt hologram/server.py hologram/skills.py hologram/ui/index.html hologram/ui/audio/rnnoise-worklet.js hologram/ui/audio/rnnoise.wasm hologram/voice.py hologram/zones.zip launch_hologram.py requirements-chat.txt requirements-voice.txt vercel_host.py""".split()
 
 
 def materialize(commit, manifest_digest, root):

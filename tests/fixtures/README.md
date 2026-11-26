@@ -1,0 +1,1 @@
+`synthetic_speech.wav` is the first four seconds of an espeak-ng synthetic voice, generated from: “Hello Jarvis, please tell me the weather in New Delhi today. I am speaking quietly and clearly.” It contains no human voice or biometric data. It is used only for deterministic signal-path checks, not real-world recognition or audio-quality claims.

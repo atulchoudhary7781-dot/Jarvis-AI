@@ -18,6 +18,10 @@ hologram/*
 !hologram/ui/
 hologram/ui/*
 !hologram/ui/index.html
+!hologram/ui/audio/
+hologram/ui/audio/*
+!hologram/ui/audio/rnnoise-worklet.js
+!hologram/ui/audio/rnnoise.wasm
 !hologram/licenses/
 hologram/licenses/*
 !hologram/licenses/kokoro-VOICE-NOTICE.md
@@ -34,3 +38,6 @@ community/*
 !hologram/catalog.py
 !hologram/licenses/gemma-TERMS.txt
 !hologram/licenses/Notice.txt
+!hologram/licenses/noise-suppressor-MIT.txt
+!hologram/licenses/rnnoise-BSD.txt
+!hologram/licenses/rnnoise-wasm-APACHE.txt

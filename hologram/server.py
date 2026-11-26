@@ -17,6 +17,10 @@ from .catalog import Catalog
 from .skills import MAX_QUERY, RateLimit, answer, reply, openweather_conditions
 
 UI = Path(__file__).parent / "ui" / "index.html"
+AUDIO_ASSETS = {
+    "/api/audio/rnnoise-worklet.js": (UI.parent / "audio" / "rnnoise-worklet.js", "text/javascript; charset=utf-8"),
+    "/api/audio/rnnoise.wasm": (UI.parent / "audio" / "rnnoise.wasm", "application/wasm"),
+}
 
 
 def make_server(port=8765, *, preview=False, desktop=None):
@@ -59,7 +63,7 @@ def make_server(port=8765, *, preview=False, desktop=None):
     )
     script = body.split(b"<script>", 1)[1].split(b"</script>", 1)[0]
     digest = base64.b64encode(hashlib.sha256(script).digest()).decode()
-    csp = f"default-src 'none'; script-src 'sha256-{digest}'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; media-src blob: data:; base-uri 'none'; form-action 'none'"
+    csp = f"default-src 'none'; script-src 'sha256-{digest}' 'self' 'wasm-unsafe-eval'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; media-src blob: data:; base-uri 'none'; form-action 'none'"
     csp += "; object-src 'none'"
     if not preview:
         csp += "; frame-ancestors 'none'"
@@ -134,6 +138,11 @@ def make_server(port=8765, *, preview=False, desktop=None):
             path = urlsplit(self.path).path
             if path in ("/", "/index.html"):
                 return self.write_reply(200, body, "text/html; charset=utf-8")
+            if path in AUDIO_ASSETS:
+                asset, kind = AUDIO_ASSETS[path]
+                if asset.is_file():
+                    return self.write_reply(200, asset.read_bytes(), kind)
+                return self.out(404, {"error": "Not found"})
             if path == "/api/community-skills":
                 return self.out(200, catalog.read(sync_catalog))
             if path == "/terms" and terms_path.is_file():

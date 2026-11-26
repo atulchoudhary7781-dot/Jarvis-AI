@@ -6,7 +6,7 @@
 #status{position:fixed;z-index:3;left:50%;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 60px);transform:translateX(-50%);width:min(90vw,580px);max-height:22vh;overflow:auto;color:#f9dfb8;background:#101010dc;border-radius:10px;text-align:center;padding:7px 10px;font:14px/1.4 system-ui;white-space:pre-wrap}#status:empty{display:none}
 #mobilebar,#typebox{display:none!important}
 #status,#review:not([hidden]){position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;overflow:hidden!important;white-space:nowrap!important;border:0!important;left:0!important;bottom:auto!important;transform:none!important}
-</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. During an active conversation JARVIS may listen while speaking so you can interrupt; browser echo cancellation varies. Microphone use and transcription are subject to permission and network availability. Say listen patiently for longer pauses, or what did you hear for the last phrase. External sites require a tap on the hologram after the destination is announced and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses and approval requests are spoken and announced to assistive technologies. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
+</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. During an active conversation JARVIS may listen while speaking so you can interrupt; browser echo cancellation varies. In cloud voice, local noise suppression is used when supported; otherwise the browser handles noise reduction. Browser voice input uses its own recognition service. Microphone use and transcription are subject to permission and network availability. Say noise filter off or noise filter on, or press N, to change the advanced cloud noise filter for this tab. Say listen patiently for longer pauses, or what did you hear for the last phrase. External sites require a tap on the hologram after the destination is announced and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses and approval requests are spoken and announced to assistive technologies. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
 "use strict";
 /* AMBER / Geometry atlas. All positions are generated in three dimensions.
    Four moving assemblies: outer skin, inner machinery, signal bus, and lens. */
@@ -2229,7 +2229,8 @@ const Pilot = (() => {
     follow = "",
     past = [],
     timer = null;
-  let phraseTimer=0, lastHeard='', patient=false, inputLang='';
+  let phraseTimer=0, lastHeard='', patient=false, inputLang='', noiseEnabled=true;
+  try {noiseEnabled=sessionStorage.getItem('amber:noise-filter')!=='off'} catch (_) {}
   const cloudSpeech = document.querySelector('meta[name="jarvis-cloud"]').content === 'preview';
   let cloudConsent = false, speechTarget = '', spokenReply = '';
   const canCloud = () => !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder && (window.AudioContext || window.webkitAudioContext));
@@ -3054,25 +3055,75 @@ const Pilot = (() => {
   }
   // VOICE_GATE_END
   // AUDIO_FOCUS_BEGIN
-  // Browser echo/noise suppression runs at capture. Remove low-frequency rumble
-  // from both the gate and recording when Web Audio supports it. This is not
-  // speaker identification and cannot remove other people or all noise.
-  function makeFocusedAudio(ac, stream) {
+  // High-pass and (when available) RNNoise operate on the same stream sent to
+  // transcription. They are not speaker identification or perfect isolation.
+  function makeFocusedAudio(ac, stream, denoiser=null, onFallback=()=>{}) {
     const source = ac.createMediaStreamSource(stream);
     const analyser = ac.createAnalyser(); analyser.fftSize = 1024;
     if (typeof ac.createBiquadFilter === 'function' && typeof ac.createMediaStreamDestination === 'function') {
+      let highpass, destination;
       try {
-        const highpass = ac.createBiquadFilter();
+        highpass = ac.createBiquadFilter();
         highpass.type = 'highpass'; highpass.frequency.value = 100;
-        const destination = ac.createMediaStreamDestination();
-        source.connect(highpass); highpass.connect(analyser); highpass.connect(destination);
-        return {analyser, recordStream: destination.stream};
-      } catch (_) { /* Fall back to the original stream; never claim filtering worked. */ }
+        destination = ac.createMediaStreamDestination();
+        source.connect(highpass);
+        const direct=()=>{highpass.connect(analyser);highpass.connect(destination)};
+        if (denoiser) {
+          highpass.connect(denoiser);denoiser.connect(analyser);denoiser.connect(destination);
+          denoiser.onprocessorerror=()=>{
+            // If WASM fails during capture, keep the active recording alive via
+            // the high-pass path rather than returning silence.
+            try {highpass.disconnect(denoiser);denoiser.disconnect();direct();onFallback()} catch (_) {}
+          };
+        } else direct();
+        return {analyser, recordStream: destination.stream, processing: denoiser ? 'rnnoise' : 'browser'};
+      } catch (_) {
+        try {source.disconnect();highpass?.disconnect();denoiser?.disconnect()} catch (_) {}
+        try {destination?.stream?.getTracks().forEach(t=>t.stop())} catch (_) {}
+      }
     }
     source.connect(analyser);
-    return {analyser, recordStream: stream};
+    return {analyser, recordStream: stream, processing: 'browser'};
   }
   // AUDIO_FOCUS_END
+  // RNNOISE_BEGIN
+  // Assets are first-party, pinned in the release, and loaded only after mic
+  // consent. Initialization is bounded; unsupported/failed devices use the
+  // existing browser noise suppression and high-pass path instead.
+  let noiseBytes = null;
+  async function loadNoiseSuppressor(ac) {
+    if (!noiseEnabled || ac.sampleRate !== 48000 || !ac.audioWorklet || !window.AudioWorkletNode) return null;
+    let node=null, timer=0, readyTimer=0;
+    try {
+      const controller=new AbortController();
+      const assets=Promise.all([
+        ac.audioWorklet.addModule('/api/audio/rnnoise-worklet.js'),
+        noiseBytes ? Promise.resolve(noiseBytes) : fetch('/api/audio/rnnoise.wasm', {signal:controller.signal,credentials:'same-origin'}).then(r=>{
+          if(!r.ok) throw Error('noise asset unavailable');return r.arrayBuffer();
+        }).then(bytes=>{if(bytes.byteLength<1000 || bytes.byteLength>300000)throw Error('invalid noise asset');return noiseBytes=bytes;})
+      ]);
+      let expired=false;
+      const result=await Promise.race([assets,new Promise(resolve=>{timer=setTimeout(()=>{expired=true;controller.abort();resolve(null)},3000)})]);
+      clearTimeout(timer);
+      if(expired || !result)return null;
+      node=new AudioWorkletNode(ac,'@sapphi-red/web-noise-suppressor/rnnoise',{
+        numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],channelCount:1,
+        processorOptions:{wasmBinary:result[1],maxChannels:1}
+      });
+      const ok=await new Promise(resolve=>{
+        let done=false;
+        const finish=value=>{if(done)return;done=true;clearTimeout(readyTimer);node.port.onmessage=null;node.onprocessorerror=null;resolve(value)};
+        node.port.onmessage=e=>{if(e.data==='ready')finish(true);else if(e.data==='failed')finish(false)};
+        node.onprocessorerror=()=>finish(false);
+        readyTimer=setTimeout(()=>finish(false),2500);
+      });
+      if(ok)return node;
+    } catch (_) { /* Browser, CSP, assets or WASM unavailable. */ }
+    clearTimeout(timer);clearTimeout(readyTimer);
+    try {node?.port.postMessage('destroy');node?.disconnect()} catch (_) {}
+    return null;
+  }
+  // RNNOISE_END
   // Prefer browser-wide echo cancellation when the active track explicitly
   // advertises it; keep the existing boolean request otherwise. A rejected
   // preference leaves the existing track untouched. Never assume it worked.
@@ -3096,8 +3147,8 @@ const Pilot = (() => {
   /* Captures one bounded turn; the microphone is released before upload, and
      abort invalidates both capture and network. The app does not save audio to disk. */
   class CloudRecognition {
-    constructor(){this.active=false;this.ended=false;this.stream=null;this.recordStream=null;this.record=null;this.ac=null;this.timer=0;this.fetcher=null;this.chunks=[];}
-    end(){if(this.ended)return;this.ended=true;this.active=false;clearInterval(this.timer);try{this.stream?.getTracks().forEach(t=>t.stop())}catch(_){};try{if(this.recordStream!==this.stream)this.recordStream?.getTracks().forEach(t=>t.stop())}catch(_){};try{this.ac?.close()}catch(_){};this.onend?.();}
+    constructor(){this.active=false;this.ended=false;this.stream=null;this.recordStream=null;this.record=null;this.ac=null;this.timer=0;this.fetcher=null;this.chunks=[];this.denoiser=null;}
+    end(){if(this.ended)return;this.ended=true;this.active=false;root.dataset.noise='off';clearInterval(this.timer);try{this.denoiser?.port.postMessage('destroy')}catch(_){};try{this.stream?.getTracks().forEach(t=>t.stop())}catch(_){};try{if(this.recordStream!==this.stream)this.recordStream?.getTracks().forEach(t=>t.stop())}catch(_){};try{this.ac?.close()}catch(_){};this.onend?.();}
     abort(){
       this.active=false;clearInterval(this.timer);this.fetcher?.abort();
       try{if(this.record?.state==='recording')this.record.stop()}catch(_){}
@@ -3113,8 +3164,15 @@ const Pilot = (() => {
           this.stream=stream;
           await preferAllEchoCancellation(stream);
           if(!this.active)return;
-          const A=window.AudioContext||window.webkitAudioContext;this.ac=new A();
-          const focused=makeFocusedAudio(this.ac,stream), analyser=focused.analyser;
+          const A=window.AudioContext||window.webkitAudioContext;
+          try {this.ac=new A({sampleRate:48000});} catch (_) {this.ac=new A();}
+          if(this.ac.state!=='running')await this.ac.resume();
+          if(!this.active)return;
+          const denoiser=await loadNoiseSuppressor(this.ac);
+          if(!this.active){try{denoiser?.port.postMessage('destroy');denoiser?.disconnect()}catch(_){};return;}
+          this.denoiser=denoiser;
+          const focused=makeFocusedAudio(this.ac,stream,denoiser,()=>{if(this.active)root.dataset.noise='browser'}), analyser=focused.analyser;
+          root.dataset.noise=focused.processing;
           this.recordStream=focused.recordStream;
           if(this.ac.state!=='running')await this.ac.resume();
           if(!this.active)return;
@@ -3290,6 +3348,10 @@ const Pilot = (() => {
           )
         );
         r.onstart = r.onaudiostart = didStart;
+      } else if (!barge && cloudSpeech) {
+        state("standby");
+        announce(words("Preparing the microphone. Please wait a moment.", "माइक तैयार हो रहा है। एक पल रुकिए।"));
+        r.onstart = () => {if(current())listening()};
       } else if (!barge) listening();
       r.onspeechstart = () => {
         if (current()) {
@@ -3532,6 +3594,13 @@ const Pilot = (() => {
       return true;
     }
     if (!fromRecipe) {
+      if (/^(?:noise filter (?:on|off)|noise (?:filter|reduction) (?:chalu|band)(?: karo)?|नॉइज़ फिल्टर (?:चालू|बंद)(?: करो)?|शोर फिल्टर (?:चालू|बंद)(?: करो)?)$/.test(q)) {
+        noiseEnabled=!/(?:off|band|बंद)$|(?:off|band|बंद) karo$|बंद करो$/.test(q);
+        try {sessionStorage.setItem('amber:noise-filter',noiseEnabled?'on':'off')} catch (_) {}
+        speak(!cloudSpeech ? words('The advanced noise filter only works in cloud voice. Browser recognition is unchanged.', 'बेहतर नॉइज़ फ़िल्टर केवल क्लाउड आवाज़ में काम करता है। ब्राउज़र पहचान नहीं बदली है।') :
+          noiseEnabled ? words('Advanced noise filter on when supported.', 'सपोर्ट होने पर बेहतर नॉइज़ फ़िल्टर चालू है।') : words('Advanced noise filter off. Browser noise settings may still apply.', 'बेहतर नॉइज़ फ़िल्टर बंद है। ब्राउज़र की नॉइज़ सेटिंग लागू हो सकती है।'));
+        return true;
+      }
       if(/^(?:listen patiently|wait a little longer|thoda ruk (?:ke|kar) suno|थोड़ा रुक (?:के|कर) सुनो|आराम से सुनो|normal pauses|सामान्य विराम)$/.test(q)){
         patient=!/normal|सामान्य/.test(q);try{sessionStorage.setItem('amber:patient',patient?'yes':'no')}catch(_){}speak(patient?words('Take your time. I’ll wait a little longer between words.','आराम से बोलो। तुम्हारे रुकने पर मैं थोड़ा और इंतज़ार करूँगा।'):words('Back to normal pauses.','ठीक है, पहले जैसा विराम।'));return true;}
       const ear=/^(?:listen in (english|hindi)|(?:sunne ki bhasha|सुनने की भाषा) (english|hindi|हिंदी|अंग्रेज़ी)|((?:इंग्लिश|हिंदी|अंग्रेज़ी)) सुनो)$/.exec(q);
@@ -3872,6 +3941,14 @@ const Pilot = (() => {
       e.preventDefault();
       unlock();
       setAutomatic(!automatic);
+    } else if (k === "n") {
+      e.preventDefault();
+      const keep=armed;
+      invalidate();setArmed(keep);noiseEnabled=!noiseEnabled;
+      try {sessionStorage.setItem('amber:noise-filter',noiseEnabled?'on':'off')} catch (_) {}
+      announce(!cloudSpeech ? words('Advanced noise filter is for cloud voice; browser recognition is unchanged.', 'बेहतर नॉइज़ फ़िल्टर क्लाउड आवाज़ के लिए है; ब्राउज़र पहचान नहीं बदली है।') :
+        noiseEnabled ? words('Advanced noise filter on when supported.', 'सपोर्ट होने पर बेहतर नॉइज़ फ़िल्टर चालू है।') : words('Advanced noise filter off.', 'बेहतर नॉइज़ फ़िल्टर बंद है।'));
+      if(keep)scheduleListen(240);
     } else if (k === "f") full();
     else if (k === "p") stage.togglePause();
     else if (k === "h" || k === "e") {
