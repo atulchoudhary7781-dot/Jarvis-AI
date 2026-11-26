@@ -32,6 +32,10 @@ During an active conversation the microphone may remain active or reopen while J
 | Personal shortcuts | Teach a reviewed routine or quiz, confirm it, and run it later by name. Shortcuts are stored in the current browser profile. |
 | Community skills | Say **“Community skills”** to discover reviewed examples such as **“City duet”** and **“Planet pop quiz.”** |
 
+For an unmatched spoken request, JARVIS asks you to try again rather than assuming you wanted open chat. To use open-ended Gemma chat, say **“Open chat”**, read its terms and explicitly agree for the tab. A typed open-chat request, where a typing interface is enabled, can also show the terms.
+
+To reduce long waits, slow neural speech may fall back to a device voice; its sound and availability depend on the browser. The response itself and recognition may still be delayed by the network or provider.
+
 The browser's speech-recognition service and microphone determine recognition accuracy. Hindi and Hinglish may still be misheard; recognition is not guaranteed. For a missed command, repeat it or use the visible **Type** button, then **Send**. Spoken replies and status messages are also displayed on screen; anyone looking at the screen can see them.
 
 ### Keyboard controls
