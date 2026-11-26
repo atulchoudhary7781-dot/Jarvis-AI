@@ -13,4 +13,4 @@ async function scenario(mode){const p=await b.newPage({viewport:{width:900,heigh
  else if(mode==='empty'){await p.waitForFunction(()=>qa.spoken.some(s=>/no microphone is available|माइक नहीं मिला/i.test(s)),null,{timeout:10000});assert.equal(uploads,0);}
  else {await p.waitForFunction(()=>qa.spoken.some(s=>/too long|बहुत लंबी/i.test(s)),null,{timeout:24000});assert.equal(uploads,0);}
  assert.ok(await p.evaluate(()=>qa.stops>0));assert.deepEqual(errors,[]);console.log('PASS',mode,mode==='soft'?'quiet voice captured':mode==='oversize'?'oversized recording gives a clear error without upload':mode==='empty'?'empty recording gives a clear error without upload':'long continuous utterance rejected without upload');await p.close();}
- await Promise.all([scenario('soft'),scenario('long'),scenario('oversize'),scenario('empty')]);await b.close();})().catch(e=>{console.error(e);process.exit(1)});
+ for(const mode of ['soft','long','oversize','empty']) await scenario(mode);await b.close();})().catch(e=>{console.error(e);process.exit(1)});

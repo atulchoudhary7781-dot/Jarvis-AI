@@ -6,7 +6,7 @@
 #status{position:fixed;z-index:3;left:50%;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 60px);transform:translateX(-50%);width:min(90vw,580px);max-height:22vh;overflow:auto;color:#f9dfb8;background:#101010dc;border-radius:10px;text-align:center;padding:7px 10px;font:14px/1.4 system-ui;white-space:pre-wrap}#status:empty{display:none}
 #mobilebar,#typebox{display:none!important}
 #status,#review:not([hidden]){position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;overflow:hidden!important;white-space:nowrap!important;border:0!important;left:0!important;bottom:auto!important;transform:none!important}
-</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. During an active cloud conversation JARVIS also listens while speaking so you can interrupt. Microphone use and transcription are subject to permission and network availability. Say listen patiently for longer pauses, or what did you hear for the last phrase. External sites require a tap on the hologram after the destination is announced and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses and approval requests are spoken and announced to assistive technologies. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
+</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. During an active conversation JARVIS may listen while speaking so you can interrupt; browser echo cancellation varies. Microphone use and transcription are subject to permission and network availability. Say listen patiently for longer pauses, or what did you hear for the last phrase. External sites require a tap on the hologram after the destination is announced and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses and approval requests are spoken and announced to assistive technologies. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
 "use strict";
 /* AMBER / Geometry atlas. All positions are generated in three dimensions.
    Four moving assemblies: outer skin, inner machinery, signal bus, and lens. */
@@ -2656,10 +2656,19 @@ const Pilot = (() => {
     return out.filter(Boolean);
   }
   const b64bytes = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-  // Only an explicitly consented cloud session monitors playback. Detection is
-  // best effort: browser echo cancellation is requested, not guaranteed.
+  // During an explicitly active conversation, keep listening while speaking.
+  // Cloud capture requires its separate disclosure; native recognition uses the
+  // browser's own speech service. Echo detection is best effort, not voice ID.
+  // ECHO_GUARD_BEGIN
+  function likelyPlaybackEcho(heard, reply) {
+    const fold = x => String(x || '').normalize('NFKC').toLocaleLowerCase()
+      .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+    const h = fold(heard), r = fold(reply);
+    return !!(h && r && (' ' + r + ' ').includes(' ' + h + ' '));
+  }
+  // ECHO_GUARD_END
   function startBargeIn() {
-    if (cloudSpeech && cloudConsent && armed && player && !rec && !typed && !document.hidden)
+    if ((!cloudSpeech || cloudConsent) && armed && player && !rec && !typed && !document.hidden)
       listen(ticket, 0, null, true);
   }
   function playNative(text, lang, valid) {
@@ -2970,11 +2979,16 @@ const Pilot = (() => {
       return;
     }
     if (rec?.barge) {
-      rec.barge=false;
-      rec.echoText='';
-      rec.relax?.();
-      state("listening");
-      return;
+      if (cloudSpeech) {
+        rec.barge=false;
+        rec.echoText='';
+        rec.relax?.();
+        state("listening");
+        return;
+      }
+      // Discard delayed playback transcripts and start a clean native turn.
+      // This also lets the user repeat words from the answer afterwards.
+      releaseInput();
     }
     state("standby");
     const tok = ticket;
@@ -3091,12 +3105,11 @@ const Pilot = (() => {
         if(!result?.ok){this.onerror?.({error:'network'});this.end();return;}
         // Suppress obvious speaker echo; this is a safeguard, not reliable
         // acoustic echo cancellation or proof that a transcript is user speech.
-        const fold=x=>String(x||'').toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-        const heard=fold(result.text), reply=fold(this.echoText);
-        if(reply && heard.length>=12 && reply.includes(heard)){this.end();return;}
+        const stop=/^(?:stop listening|mic band karo|माइक बंद करो|सो जाओ)$/.test(Pilot.key(result.command||result.text));
+        if(!stop && this.echoText && likelyPlaybackEcho(result.text, this.echoText)){this.end();return;}
         const name=String(result.language||'').toLowerCase(),code=languageCode(name);
         speechTarget=code && !['hi','en'].includes(code)?name:'';
-        if(code==='hi')useLanguage('hi-IN',false);else useLanguage('en-IN',false);
+        if(code==='hi')useLanguage('hi-IN',false);else if(code)useLanguage('en-IN',false);
         const transcript=String(result.command||result.text||'').trim();
         if(transcript){const row=Object.assign([{transcript,confidence:1}],{isFinal:true});this.onresult?.({resultIndex:0,results:[row]});}
         this.end();
@@ -3168,6 +3181,9 @@ const Pilot = (() => {
     };
     const fail = (code) => {
       if (!current()) return;
+      // Some browsers cannot recognize during playback. Let the answer finish
+      // rather than turning the session off; normal listening resumes after it.
+      if (!cloudSpeech && r.barge && player) { releaseInput(); return; }
       if (
         awaitingStart ||
         (openedSession && ["not-allowed", "service-not-allowed", "audio-capture"].includes(code))
@@ -3230,20 +3246,38 @@ const Pilot = (() => {
       r.onspeechstart = () => {
         if (current()) {
           didStart();
-          if (r.barge && player) {
+          if (cloudSpeech && r.barge && player) {
             r.barge=false;
             stopAudio();
             state("listening");
             announce(words("Listening to your interruption.", "आपकी नई बात सुन रहा हूँ।"));
           }
-          resumed=true; clearTimeout(phraseTimer);stage.pulse(0.42);
+          if (!r.barge) resumed=true;
+          clearTimeout(phraseTimer);stage.pulse(0.42);
         }
       };
-      r.onnomatch = () => {if(current())finish(true)};
+      r.onnomatch = () => {if(current() && !(r.barge && player))finish(true)};
       r.onresult = e => {
         if (!current() || !e.results?.length) return;
-        didStart(); resumed=true; clearTimeout(phraseTimer);
-        const rows=Array.from(e.results);if(rows.length>20){finish(true);return;}
+        didStart();
+        let rows=Array.from(e.results);if(rows.length>20){finish(true);return;}
+        if (!cloudSpeech && r.echoText) {
+          rows=rows.filter(row => {
+            const text=String(row?.[0]?.transcript || '');
+            const stop=/^(?:stop listening|mic band karo|माइक बंद करो|सो जाओ)$/.test(Pilot.key(text));
+            return stop || !likelyPlaybackEcho(text, r.echoText);
+          });
+          if (!rows.length) return;
+        }
+        if (!cloudSpeech && r.barge && player) {
+          const text=String(rows.at(-1)?.[0]?.transcript || '').trim();
+          if (text.length < 3 && rows.at(-1)?.isFinal === false) return;
+          r.barge=false;
+          stopAudio();
+          state("listening");
+          announce(words("Listening to your interruption.", "आपकी नई बात सुन रहा हूँ।"));
+        }
+        resumed=true; clearTimeout(phraseTimer);
         parts=rows.filter(x=>x.isFinal!==false).map(Pilot.heard).filter(Boolean);
         partial=rows.some(x=>x.isFinal===false);
         if(!partial && /^(?:stop listening|mic band karo|माइक बंद करो|सो जाओ)$/.test(Pilot.key(line()))){parts.forEach(p=>p.unsure=false);finish();return;}

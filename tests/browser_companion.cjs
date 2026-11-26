@@ -8,7 +8,7 @@ function fixture() {
   const x = (window.friendQA = { active: null, starts: 0, overlap: 0, u: null, drafts: [] });
   window.SpeechRecognition = class {
     start() {
-      if (x.active || x.u) x.overlap++;
+      if (x.active) x.overlap++;
       x.active = this;
       x.starts++;
     }
@@ -42,7 +42,6 @@ function fixture() {
         u?.onerror?.({ error: "canceled" });
       },
       speak(u) {
-        if (x.active) x.overlap++;
         x.u = u;
         setTimeout(() => {
           if (x.u === u) u.onstart?.();
@@ -88,7 +87,7 @@ function fixture() {
       await wait(() => friendQA.active);
     };
     async function turn(s, regex, off = false) {
-      await wait(() => friendQA.active && !friendQA.u);
+      await wait(() => friendQA.active && !friendQA.active.barge && !friendQA.u && document.documentElement.dataset.state === "listening");
       await p.evaluate((v) => friendQA.say(v), s);
       await p.waitForFunction(
         (src) => new RegExp(src, "iu").test(document.querySelector("#status").textContent),
@@ -96,7 +95,7 @@ function fixture() {
         { timeout: 35000 }
       );
       if (off) await wait(() => document.documentElement.dataset.state === "idle");
-      else await wait(() => friendQA.active);
+      else await wait(() => friendQA.active && !friendQA.active.barge && !friendQA.u && document.documentElement.dataset.state === "listening");
     }
     await boot(() => p.goto(root));
     await turn("hello friend", /day|mind/);

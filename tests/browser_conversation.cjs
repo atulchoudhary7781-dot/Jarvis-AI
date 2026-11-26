@@ -10,7 +10,7 @@ function installFixture() {
   const x = (window.voiceTest = { starts: 0, stops: 0, active: null, spoken: [], overlap: 0, utterance: null });
   window.SpeechRecognition = class {
     start() {
-      if (x.active || x.utterance) x.overlap++;
+      if (x.active) x.overlap++;
       x.active = this;
       x.starts++;
     }
@@ -48,7 +48,6 @@ function installFixture() {
       if (u) u.onerror?.({ error: "canceled" });
     },
     speak(u) {
-      if (x.active) x.overlap++;
       x.utterance = u;
       x.spoken.push({ text: u.text, voice: u.voice?.name });
       setTimeout(() => {
@@ -87,36 +86,39 @@ function installFixture() {
     await wait(() => document.documentElement.dataset.state === "speaking");
     assert.match(await ev(() => voiceTest.spoken.at(-1).text), /टोक्यो/);
     assert.match(await ev(() => voiceTest.spoken.at(-1).voice), /Madhur/);
-    assert.equal(await ev(() => !!voiceTest.active), false);
+    await wait(() => voiceTest.active !== null);
+    assert.equal(await ev(() => voiceTest.starts), 2);
     await p.waitForTimeout(600);
-    assert.equal(await ev(() => voiceTest.starts), 1);
+    assert.equal(await ev(() => voiceTest.starts), 2);
     await ev(() => voiceTest.finish());
-    await wait(() => voiceTest.starts === 2);
+    await wait(() => voiceTest.active !== null && voiceTest.starts >= 3);
     await ev(() => voiceTest.say("और लंदन में?"));
     await wait(() => document.documentElement.dataset.state === "speaking");
     assert.match(await ev(() => voiceTest.spoken.at(-1).text), /लंदन/);
+    await wait(() => voiceTest.active !== null);
     await ev(() => voiceTest.finish());
-    await wait(() => voiceTest.starts === 3);
+    await wait(() => voiceTest.active !== null && voiceTest.starts >= 5);
     await ev(() => voiceTest.say("Jarvis, mic band karo"));
     await wait(() => document.documentElement.dataset.state === "speaking");
     assert.equal(await p.getAttribute("#core", "aria-pressed"), "false");
     await ev(() => voiceTest.finish());
     await p.waitForTimeout(800);
-    assert.equal(await ev(() => voiceTest.starts), 3);
+    const stoppedStarts = await ev(() => voiceTest.starts);
+    assert.equal(await ev(() => voiceTest.active), null);
     console.log(
-      "PASS: one gesture, two real answers including a contextual follow-up, no mid-reply capture, spoken stop."
+      "PASS: one gesture, two real answers including a contextual follow-up, mid-reply listening and spoken stop."
     );
     await p.keyboard.press("Space");
     await wait(() => voiceTest.active !== null);
     const n = await ev(() => voiceTest.spoken.length);
     await ev(() => voiceTest.fault("no-speech"));
-    await wait(() => voiceTest.starts === 5);
+    await p.waitForFunction((n) => voiceTest.starts === n + 2, stoppedStarts);
     assert.equal(await ev(() => voiceTest.spoken.length), n);
     await ev(() => voiceTest.fault("not-allowed"));
     await wait(() => document.documentElement.dataset.conversation === "off");
     await p.keyboard.press("Escape");
     await p.waitForTimeout(650);
-    assert.equal(await ev(() => voiceTest.starts), 5);
+    assert.equal(await ev(() => voiceTest.starts), stoppedStarts + 2);
     console.log("PASS: silence rearms quietly, permission denial never loops.");
     await p.keyboard.press("Space");
     await wait(() => voiceTest.active !== null);
@@ -151,7 +153,7 @@ function installFixture() {
     assert.equal(await ev(() => voiceTest.overlap), 0);
     assert.equal(await ev(() => voiceTest.active), null);
     assert.equal(errors.length, 0, errors.join("; "));
-    console.log("PASS: hidden tab stays disarmed, late answer ignored, no overlap or JS errors.");
+    console.log("PASS: hidden tab stays disarmed, late answer ignored, no duplicate recognizers or JS errors.");
   } finally {
     await b.close();
   }
