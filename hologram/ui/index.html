@@ -2663,8 +2663,33 @@ const Pilot = (() => {
   function likelyPlaybackEcho(heard, reply) {
     const fold = x => String(x || '').normalize('NFKC').toLocaleLowerCase()
       .replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
-    const h = fold(heard), r = fold(reply);
-    return !!(h && r && (' ' + r + ' ').includes(' ' + h + ' '));
+    const h = fold(heard), r = fold(reply).slice(0, 4000);
+    if (!h || h.length > 360 || !r) return false;
+    if ((' ' + r + ' ').includes(' ' + h + ' ')) return true;
+    // A conservative one-character tolerance for long, multiword fragments:
+    // recognition can slightly misspell playback. Short or meaningfully changed
+    // phrases are not assumed to be echo. This remains only a heuristic.
+    const words = h.split(' '), ref = r.split(' ');
+    if (h.length < 45 || h.length > 180 || words.length < 5 || words.length > 24) return false;
+    const differsByOne = (a, b) => {
+      if (Math.abs(a.length-b.length)>1) return false;
+      let i=0, j=0, changes=0;
+      while (i<a.length && j<b.length) {
+        if (a[i]===b[j]) { i++; j++; continue; }
+        if (++changes>1) return false;
+        if (a.length>b.length) i++; else if (b.length>a.length) j++; else {i++;j++;}
+      }
+      return changes + (a.length-i) + (b.length-j) <= 1;
+    };
+    // Do not discard a new instruction if a number, negation or question
+    // changed. A transcript that combines playback and a new question must pass.
+    const sensitive = t => (t.match(/(?:\p{N}+|\b(?:not|never|no|dont|don't|nahi|nahin|mat)\b|नहीं|नही|मत)/giu)||[]).join('|');
+    const n = words.length;
+    for (let start=0; start+n<=ref.length && start<512; start++) {
+      const candidate=ref.slice(start,start+n).join(' ');
+      if (sensitive(h)===sensitive(candidate) && differsByOne(h,candidate)) return true;
+    }
+    return false;
   }
   // ECHO_GUARD_END
   function startBargeIn() {
@@ -3048,6 +3073,26 @@ const Pilot = (() => {
     return {analyser, recordStream: stream};
   }
   // AUDIO_FOCUS_END
+  // Prefer browser-wide echo cancellation when the active track explicitly
+  // advertises it; keep the existing boolean request otherwise. A rejected
+  // preference leaves the existing track untouched. Never assume it worked.
+  // ECHO_CAPTURE_BEGIN
+  async function preferAllEchoCancellation(stream) {
+    const track=stream.getAudioTracks?.()[0];
+    if (!track?.getCapabilities || !track?.applyConstraints) return;
+    try {
+      const options=track.getCapabilities().echoCancellation;
+      if (!Array.isArray(options) || !options.includes('all')) return;
+      let timer;
+      try {
+        await Promise.race([
+          track.applyConstraints({...track.getConstraints?.(),echoCancellation:{ideal:'all'}}),
+          new Promise(resolve => {timer=setTimeout(resolve,800);})
+        ]);
+      } finally { clearTimeout(timer); }
+    } catch (_) { /* Keep the browser's original capture settings. */ }
+  }
+  // ECHO_CAPTURE_END
   /* Captures one bounded turn; the microphone is released before upload, and
      abort invalidates both capture and network. The app does not save audio to disk. */
   class CloudRecognition {
@@ -3065,7 +3110,10 @@ const Pilot = (() => {
         try{
           const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true},video:false});
           if(!this.active){stream.getTracks().forEach(t=>t.stop());return;}
-          this.stream=stream;const A=window.AudioContext||window.webkitAudioContext;this.ac=new A();
+          this.stream=stream;
+          await preferAllEchoCancellation(stream);
+          if(!this.active)return;
+          const A=window.AudioContext||window.webkitAudioContext;this.ac=new A();
           const focused=makeFocusedAudio(this.ac,stream), analyser=focused.analyser;
           this.recordStream=focused.recordStream;
           if(this.ac.state!=='running')await this.ac.resume();
