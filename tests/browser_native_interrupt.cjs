@@ -19,6 +19,7 @@ const {chromium}=require('playwright'), assert=require('node:assert/strict');
    window.SpeechSynthesisUtterance=class{constructor(text){this.text=text}};
    Object.defineProperty(window,'speechSynthesis',{configurable:true,value:{get speaking(){return !!q.utterance},get pending(){return false},getVoices(){return[]},cancel(){if(q.utterance)q.cancels++;q.utterance=null},speak(u){q.utterance=u;q.spoken.push(u.text);setTimeout(()=>q.utterance===u&&u.onstart?.(),1)}}});
   });
+  await page.route('**/api/voice',r=>r.fulfill({json:{ok:false,reason:'system'}}));
   const queries=[];await page.route('**/api/command',async r=>{queries.push(r.request().postDataJSON().query);await r.fulfill({json:{text:'The answer is 42.',lang:'en-IN'}})});
   await page.goto(process.env.AMBER_TEST_URL||'http://127.0.0.1:8765');
   assert.equal(await page.locator('meta[name=jarvis-cloud]').getAttribute('content'),'off');
