@@ -15,7 +15,7 @@ A Hindi and English voice companion with an animated hologram, spoken replies, p
 3. Say **“Hello”**, **“Time in Tokyo”**, or **“Open YouTube.”** Hindi is the default reply language; say **“Speak in English”** for English replies.
 4. Say **“Stop listening”**, press **Esc**, or tap the core to turn the microphone off. Leaving the tab also disarms it.
 
-The microphone is released while JARVIS is thinking or speaking. If automatic playback is blocked, tap the core to play the pending reply without repeating the command. Say **“Auto mic off”** or press **A** to keep future visits manual; say **“Auto mic on”** to restore automatic startup.
+During an active conversation the microphone may remain active or reopen while JARVIS speaks so you can interrupt; echo cancellation varies by browser. Stop listening, press Esc, or leave the tab to disarm it. If automatic playback is blocked, tap the core to play the pending reply without repeating the command. Say **“Auto mic off”** or press **A** to keep future visits manual; say **“Auto mic on”** to restore automatic startup.
 
 ## Features
 
@@ -42,6 +42,7 @@ The browser's speech-recognition service and microphone determine recognition ac
 | **Esc** | Cancel and stop listening |
 | **T** | Type a command |
 | **A** | Toggle automatic microphone startup for future visits |
+| **N** | Toggle the optional cloud noise filter for this tab; browser voice is unchanged |
 | **H / E** | Select Hindi / English replies |
 | **V** | Preview the voice |
 | **P / F** | Pause rotation / toggle full screen |
@@ -83,7 +84,7 @@ On Android or iOS, supported links such as YouTube and Google Maps are shown for
 - The natural-sounding voices are **synthetic stock-voice blends**, not recordings of a human or an actor. If neural speech is unavailable, the browser may use a device voice.
 - The public site is not owner-authenticated. Do not share passwords, private keys, or other secrets with it.
 - Your browser or its recognition provider may process microphone audio. Commands and recent chat context are sent to the JARVIS host when a server answer is needed. Speech text may be sent to the host for synthesis. Public lookups are sent to their respective providers.
-- In the opt-in Groq cloud voice path, a 48 kHz AudioWorklet applies RNNoise locally before transcription when the browser supports it. Otherwise the existing browser suppression/high-pass fallback is used; browser-native speech recognition is not passed through RNNoise. Say “noise filter off”/“noise filter on”, or press **N**, to change the advanced filter for the tab. The browser's own audio processing can remain active when the filter is off.
+- In the opt-in Groq cloud voice path, an optional 48 kHz AudioWorklet can apply RNNoise locally before transcription when the browser supports it. The filter is off by default because it can make some speech harder to recognize; enable it only if it helps in your environment. Otherwise the existing browser suppression/high-pass fallback is used; browser-native speech recognition is not passed through RNNoise. Say “noise filter off”/“noise filter on”, or press **N**, to change the advanced filter for the tab. Say “noise status” to hear whether browser or cloud voice is configured. The browser's own audio processing can remain active when the filter is off.
 - Noise reduction is not voice identification, does not reliably remove other speakers, and can affect quiet speech. Acoustic results and mobile support require real-device testing. Cloud voice requires its explicit consent and configured service and quotas.
 - The application does not maintain a chat-transcript or audio database, but browser, recognition-provider, and hosting policies still apply. Anyone using the same browser profile may access saved shortcuts.
 - Open-ended model output can be slow, unavailable, or incorrect; it cannot independently execute device actions. No security system can guarantee that misuse is impossible.
@@ -107,7 +108,7 @@ docker run --rm -p 127.0.0.1:8080:8080 -e PORT=8080 jarvis-amber
 
 Then open `http://localhost:8080`. The image build downloads and verifies model assets. See [DEPLOYMENT.md](DEPLOYMENT.md) for requirements and troubleshooting.
 
-The current public Vercel project was deployed from a pinned, verified container build and is **not connected to this repository for automatic Git deployments**. A GitHub push alone does not update the live website. A separate container deployment or an appropriately configured Git integration is needed to release future changes.
+Deployment settings vary by Vercel project. Verify that a new deployment is ready and that the production domain serves it; a Git push alone does not prove that the website was updated.
 
 ## Tests
 

@@ -2,10 +2,10 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict');
 (async()=>{
  const b=await chromium.launch({executablePath:process.env.AMBER_TEST_CHROMIUM||'/usr/bin/chromium',args:['--no-sandbox','--disable-dev-shm-usage','--autoplay-policy=no-user-gesture-required']});
- try{for(const mode of ['ready','unavailable','disabled','declined','slow']){
+ try{for(const mode of ['ready','unavailable','default','disabled','declined','slow']){
   const p=await b.newPage({viewport:{width:900,height:650}}),errors=[];p.on('pageerror',e=>errors.push(e.message));
   await p.addInitScript(mode=>{
-   localStorage.setItem('amber:mic-on-open','off');if(mode==='disabled')sessionStorage.setItem('amber:noise-filter','off');window.confirm=()=>mode!=='declined';window.qa={requests:0,tracks:[],contexts:[]};
+   localStorage.setItem('amber:mic-on-open','off');if(mode==='disabled')sessionStorage.setItem('amber:noise-filter','off');else if(mode!=='default')sessionStorage.setItem('amber:noise-filter','on');window.confirm=()=>mode!=='declined';window.qa={requests:0,tracks:[],contexts:[]};
    Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:async()=>{
     qa.requests++;qa.sourceContext=new AudioContext({sampleRate:48000});qa.contexts.push(qa.sourceContext);await qa.sourceContext.resume();
     const osc=qa.sourceContext.createOscillator(),gain=qa.sourceContext.createGain(),dest=qa.sourceContext.createMediaStreamDestination();gain.gain.value=.05;osc.connect(gain);gain.connect(dest);osc.start();qa.tracks=dest.stream.getTracks();return dest.stream;
@@ -27,7 +27,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict');
   }else{
    await p.waitForFunction(expected=>document.documentElement.dataset.noise===expected,mode==='ready'?'rnnoise':'browser',{timeout:10000});
    assert.equal(await p.evaluate(()=>qa.requests),1);
-   if(mode==='disabled'){
+   if(mode==='disabled'||mode==='default'){
     assert.equal(assets,0);await p.keyboard.press('n');
     await p.waitForFunction(()=>qa.requests===2&&document.documentElement.dataset.noise==='rnnoise',null,{timeout:10000});
     assert.ok(assets>0);

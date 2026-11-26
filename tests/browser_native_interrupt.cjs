@@ -24,6 +24,24 @@ const {chromium}=require('playwright'), assert=require('node:assert/strict');
   await page.goto(process.env.AMBER_TEST_URL||'http://127.0.0.1:8765');
   assert.equal(await page.locator('meta[name=jarvis-cloud]').getAttribute('content'),'off');
   await page.keyboard.press('Space');await page.waitForFunction(()=>qa.active);
+  // In native voice N must not disrupt/restart recognition or claim RNNoise is on.
+  const nativeBefore=await page.evaluate(()=>({starts:qa.starts,aborts:qa.aborts,active:qa.active}));
+  await page.keyboard.press('n');await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(()=>qa.starts),nativeBefore.starts);
+  assert.equal(await page.evaluate(()=>qa.aborts),nativeBefore.aborts);
+  assert.ok(await page.evaluate(()=>!!qa.active));
+  assert.match(await page.locator('#status').textContent(),/unavailable.*browser voice/i);
+  assert.equal(await page.evaluate(()=>sessionStorage.getItem('amber:noise-filter')),null);
+  if(mode==='noise-status'){
+   await page.evaluate(()=>qa.result([['noise status',true]]));
+   await page.waitForFunction(()=>qa.spoken.some(t=>/browser voice is active/i.test(t)));
+   await page.evaluate(()=>qa.finish());
+   await page.waitForFunction(()=>qa.spoken.some(t=>/advanced cloud filter is not used/i.test(t)));
+   assert.match((await page.evaluate(()=>qa.spoken.join(' '))),/advanced cloud filter is not used/i);
+   await page.keyboard.press('Escape');assert.equal(await page.evaluate(()=>qa.active),null);
+   assert.deepEqual(errors,[]);await page.close();
+   console.log('PASS native: noise status truthfully identifies browser voice');return;
+  }
   await page.evaluate(()=>qa.result([['help',true]]));
   await page.waitForFunction(()=>qa.utterance&&qa.active);
   const text=await page.evaluate(()=>qa.spoken[0]);
@@ -72,5 +90,5 @@ const {chromium}=require('playwright'), assert=require('node:assert/strict');
   }
   assert.deepEqual(errors,[]);await page.close();
  }
- try{for(const mode of ['interrupt','question','late-echo','failure'])await scenario(mode);}finally{await browser.close();}
+ try{for(const mode of ['interrupt','question','late-echo','failure','noise-status'])await scenario(mode);}finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1});
