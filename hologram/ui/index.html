@@ -6,7 +6,7 @@
 #status{position:fixed;z-index:3;left:50%;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 60px);transform:translateX(-50%);width:min(90vw,580px);max-height:22vh;overflow:auto;color:#f9dfb8;background:#101010dc;border-radius:10px;text-align:center;padding:7px 10px;font:14px/1.4 system-ui;white-space:pre-wrap}#status:empty{display:none}
 #mobilebar,#typebox{display:none!important}
 #status,#review:not([hidden]){position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;overflow:hidden!important;white-space:nowrap!important;border:0!important;left:0!important;bottom:auto!important;transform:none!important}
-</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. During an active conversation JARVIS may listen while speaking so you can interrupt; browser echo cancellation varies. In cloud voice, optional local noise suppression can be enabled when supported; otherwise browser noise settings may apply. The filter can affect speech and is off by default. Browser voice input uses its own recognition service. Microphone use and transcription are subject to permission and network availability. Say noise filter off or noise filter on, or press N, to change the optional cloud noise filter for this tab. Say noise status to hear which voice mode is in use. Say listen patiently for longer pauses, or what did you hear for the last phrase. If a voice request cannot be matched, try again; say open chat to review the terms for optional open conversation. External sites require a tap on the hologram after the destination is announced and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses and approval requests are spoken and announced to assistive technologies. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
+</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. During an active conversation JARVIS may listen while speaking so you can interrupt; browser echo cancellation varies. In cloud voice, optional local noise suppression can be enabled when supported; otherwise browser noise settings may apply. The filter can affect speech and is off by default. Browser voice input uses its own recognition service. Microphone use and transcription are subject to permission and network availability. Say noise filter off or noise filter on, or press N, to change the optional cloud noise filter for this tab. Say noise status to hear which voice mode is in use. Say listen patiently for longer pauses, or what did you hear for the last phrase. Say fast voice on for a quicker device voice, or fast voice off to try the natural voice again. If a voice request cannot be matched, try again; say open chat to review the terms for optional open conversation. External sites require a tap on the hologram after the destination is announced and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses and approval requests are spoken and announced to assistive technologies. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
 "use strict";
 /* AMBER / Geometry atlas. All positions are generated in three dimensions.
    Four moving assemblies: outer skin, inner machinery, signal bus, and lens. */
@@ -2229,10 +2229,10 @@ const Pilot = (() => {
     follow = "",
     past = [],
     timer = null;
-  let phraseTimer=0, lastHeard='', patient=false, inputLang='', noiseEnabled=false;
+  let phraseTimer=0, lastHeard='', lastHeardUnclear=false, patient=false, inputLang='', noiseEnabled=false, fastVoice=false;
   // Advanced suppression can distort speech. Default to the browser path and
   // require a per-tab opt-in; do not persist biometric data or audio.
-  try {noiseEnabled=sessionStorage.getItem('amber:noise-filter')==='on'} catch (_) {}
+  try {noiseEnabled=sessionStorage.getItem('amber:noise-filter')==='on';fastVoice=sessionStorage.getItem('amber:fast-voice')==='on'} catch (_) {}
   const cloudSpeech = document.querySelector('meta[name="jarvis-cloud"]').content === 'preview';
   let cloudConsent = false, speechTarget = '', spokenReply = '';
   const canCloud = () => !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder && (window.AudioContext || window.webkitAudioContext));
@@ -2439,7 +2439,7 @@ const Pilot = (() => {
     state("idle");
   }
   function cancel() {
-    lastHeard="";
+    lastHeard="";lastHeardUnclear=false;
     setArmed(false);
     invalidate();
     friend.reset();
@@ -2894,11 +2894,11 @@ const Pilot = (() => {
     const load = (k) =>
       // Bound first-audio delay when a device fallback exists. Aborting the
       // request here may not stop work already running on the server.
-      rpc("voice", { text: parts[k], lang: lang.startsWith("hi") ? "hi-IN" : "en-IN" }, tok, hasDeviceSpeech ? (k === 0 ? 2000 : 4000) : 16000).catch(
+      rpc("voice", { text: parts[k], lang: lang.startsWith("hi") ? "hi-IN" : "en-IN" }, tok, hasDeviceSpeech ? (k === 0 ? 1500 : 4000) : 16000).catch(
         () => null
       );
     try {
-      if (canNeural() && performance.now() >= fallbackUntil && parts.length) {
+      if (canNeural() && !(fastVoice && hasDeviceSpeech) && performance.now() >= fallbackUntil && parts.length) {
         let future = load(0);
         for (; i < parts.length; i++) {
           let clip = await future;
@@ -3248,9 +3248,18 @@ const Pilot = (() => {
       if(!current())return;
       const q=line(),weak=unclear || partial || !q || q.length>360 || all().some(p=>p.unsure);
       releaseInput();silence=rapidEnds=netErrors=0;
-      if(weak){speak(words('I didn’t catch that clearly. Please say the whole thing again.','साफ़ नहीं सुन पाया। एक बार पूरा फिर से बोलिए।'),locale,tok);return;}
-      if(/^(?:what did you hear|maine kya (?:kaha|bola)|मैंने क्या (?:कहा|बोला))$/.test(Pilot.key(q))){speak(lastHeard?words('I heard: ','मैंने सुना: ')+lastHeard:words('No earlier phrase in this session.','इस बार अभी कुछ और नहीं सुना।'),locale,tok);return;}
-      lastHeard=q;void execute(q,tok, 'voice');
+      const hearQuery=/^(?:what did you hear|maine kya (?:kaha|bola)|मैंने क्या (?:कहा|बोला))$/.test(Pilot.key(q));
+      if(weak){
+        // Retain only the final, bounded transcript in memory for an explicit
+        // 'what did you hear' request; never execute it or upload it here.
+        if(!hearQuery){lastHeard=q && q.length<=360 ? q : '';lastHeardUnclear=!!lastHeard;}
+        speak(words('I didn’t catch that clearly. Please say the whole thing again.','साफ़ नहीं सुन पाया। एक बार पूरा फिर से बोलिए।'),locale,tok);return;
+      }
+      if(hearQuery){
+        const prefix=lastHeardUnclear?words('I may have heard: ','शायद मैंने सुना: '):words('I heard: ','मैंने सुना: ');
+        speak(lastHeard?prefix+lastHeard:words('No earlier phrase in this session.','इस बार अभी कुछ और नहीं सुना।'),locale,tok);return;
+      }
+      lastHeard=q;lastHeardUnclear=false;void execute(q,tok, 'voice');
     };
     const settle=(delay)=>{clearTimeout(phraseTimer);phraseTimer=setTimeout(()=>finish(),delay)};
     const hold=()=>Pilot.fragment(line())?(patient?2600:1850):(patient?1650:830);
@@ -3600,6 +3609,18 @@ const Pilot = (() => {
       return true;
     }
     if (!fromRecipe) {
+      if (/^(?:fast voice (?:on|off)|(?:तेज़|तेज) आवाज़ (?:चालू|बंद)(?: करो)?|(?:तेज़|तेज) आवाज (?:चालू|बंद)(?: करो)?)$/.test(q)) {
+        const enable=!/(?:off|बंद)(?: करो)?$/.test(q);
+        if (enable && !(synth && window.SpeechSynthesisUtterance)) {
+          speak(words('Fast device voice is unavailable in this browser.', 'इस ब्राउज़र में तेज़ डिवाइस आवाज़ उपलब्ध नहीं है।'), locale, tok);
+          return true;
+        }
+        fastVoice=enable;
+        try {sessionStorage.setItem('amber:fast-voice',fastVoice?'on':'off')} catch (_) {}
+        speak(fastVoice ? words('Fast voice on. The device voice may sound different.', 'तेज़ आवाज़ चालू है। डिवाइस की आवाज़ अलग हो सकती है।') :
+          words('Fast voice off. I will try the natural voice when available.', 'तेज़ आवाज़ बंद है। उपलब्ध होने पर प्राकृतिक आवाज़ की कोशिश करूँगा।'),locale,tok);
+        return true;
+      }
       if (/^(?:noise status|noise filter status|नॉइज़ स्टेटस|शोर फिल्टर स्थिति)$/.test(q)) {
         speak(!cloudSpeech ? words('Browser voice is active. The advanced cloud filter is not used; browser noise settings may apply.', 'ब्राउज़र आवाज़ चालू है। क्लाउड फ़िल्टर इस्तेमाल नहीं होता; ब्राउज़र की नॉइज़ सेटिंग लागू हो सकती है।') :
           noiseEnabled ? words('Cloud noise filter is requested when supported, but it can fall back or affect speech.', 'सपोर्ट होने पर क्लाउड नॉइज़ फ़िल्टर इस्तेमाल होगा, पर फ़ॉलबैक या आवाज़ पर असर हो सकता है।') :

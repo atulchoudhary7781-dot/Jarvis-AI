@@ -23,7 +23,7 @@ During an active conversation the microphone may remain active or reopen while J
 | --- | --- |
 | Conversation | Talk about your day, ask for an idea, or request a riddle. Open-ended model chat requires accepting the displayed terms for the current tab. |
 | Speech and listening | Synthesized Hindi and English voices, pause-aware turn-taking, and recognition alternatives. Say **“Listen patiently”** for longer pauses or **“Normal pauses”** to return to the default. |
-| Recognition language | Say **“Listen in Hindi”** or **“Listen in English.”** The reply language is controlled separately. Say **“What did you hear”** to hear the previous recognized phrase. |
+| Recognition language | Say **“Listen in Hindi”** or **“Listen in English.”** The reply language is controlled separately. Say **“What did you hear”** or **“मैंने क्या कहा”** to hear the previous recognized phrase, including a low-confidence result. The phrase is held in page memory until listening stops; if you ask JARVIS to repeat it, it may be sent to the host for speech synthesis. |
 | Website opening | Say **“Open YouTube”**, **“Open Google Maps”**, or **“Search YouTube for music.”** Review the displayed destination and tap its button to open it. |
 | Local computer apps | An optional private session can request Calculator, Notepad and Paint on Windows, or Calculator and TextEdit on macOS, after native approval. See [Local app control](#local-app-control-experimental). |
 | Public information | Ask for a city clock or date, weather, world headlines, or a Wikipedia search. Availability depends on the upstream services. |
@@ -34,7 +34,7 @@ During an active conversation the microphone may remain active or reopen while J
 
 For an unmatched spoken request, JARVIS asks you to try again rather than assuming you wanted open chat. To use open-ended Gemma chat, say **“Open chat”**, read its terms and explicitly agree for the tab. A typed open-chat request, where a typing interface is enabled, can also show the terms.
 
-To reduce long waits, slow neural speech may fall back to a device voice; its sound and availability depend on the browser. The response itself and recognition may still be delayed by the network or provider.
+To reduce long waits, slow neural speech may fall back to a device voice; its sound and availability depend on the browser. Say **“Fast voice on”** or **“तेज़ आवाज़ चालू करो”** to use the device voice immediately for this tab, or **“Fast voice off”** to try the natural voice again. The response itself and recognition may still be delayed by the network or provider.
 
 The browser's speech-recognition service and microphone determine recognition accuracy. Hindi and Hinglish may still be misheard; recognition is not guaranteed. For a missed command, repeat it or use the visible **Type** button, then **Send**. Spoken replies and status messages are also displayed on screen; anyone looking at the screen can see them.
 
