@@ -2180,8 +2180,16 @@ const Pilot = (() => {
       }
     }return {text:top.t,unsure};
   }
-  const fragment = t => !prep(t)||alias.has(prep(t))||/^(?:open|launch|run|kholo|खोलो|मुझे|मुझे ज़रा|set a timer for|time in|weather in|search youtube for)$/.test(prep(t));
-  return {action,heard,fragment,key,wake};
+  // Incomplete endings are never executed merely because a mobile recognizer
+  // ended between words. This does not imply that complete text was correct.
+  const dangling = t => {
+    const q=prep(t);
+    // Preserve contextual follow-ups such as 'और मुंबई में'.
+    if (/^(?:और|aur)\s+[\p{L}\p{M} .’'-]{1,52}\s+(?:में|का|की|mein|me|ka|ki)$/u.test(q)) return false;
+    return /(?:^|\s)(?:(?:में|mein|me) (?:कितने|कितना|kitne|kitna)|में|का|की|के|को|से|पर|और|तथा|गुणा|गुना|जोड़|जोड़|जमा|भाग|mein|me|ka|ki|ke|ko|se|aur|guna|jod|in|of|for|and|with|plus|minus|multiplied by|divided by|times)\s*$/u.test(q);
+  };
+  const fragment = t => !prep(t)||alias.has(prep(t))||dangling(t)||/^(?:open|launch|run|kholo|खोलो|मुझे|मुझे ज़रा|set a timer for|time in|weather in|search youtube for)$/.test(prep(t));
+  return {action,heard,fragment,dangling,key,wake};
 })();
 /* PILOT END */
 
@@ -3261,8 +3269,13 @@ const Pilot = (() => {
       }
       lastHeard=q;lastHeardUnclear=false;void execute(q,tok, 'voice');
     };
-    const settle=(delay)=>{clearTimeout(phraseTimer);phraseTimer=setTimeout(()=>finish(),delay)};
-    const hold=()=>Pilot.fragment(line())?(patient?2600:1850):(patient?1650:830);
+    // A short city response to a pending weather question is already complete,
+    // even when it ends in a Hindi postposition.
+    const cityFollow=()=>follow==='weather' && /^[\p{L}\p{M} .’'-]{1,52}\s+(?:में|mein|me)$/u.test(Pilot.key(line()));
+    const incomplete=()=>!cityFollow() && Pilot.dangling(line());
+    const needsMore=()=>!cityFollow() && Pilot.fragment(line());
+    const settle=(delay)=>{clearTimeout(phraseTimer);phraseTimer=setTimeout(()=>finish(incomplete()),delay)};
+    const hold=()=>needsMore()?(patient?2600:1850):(patient?1650:830);
     const listening = () => {
       state("listening");
       announce(
@@ -3295,7 +3308,7 @@ const Pilot = (() => {
     const quiet = () => {
       if (!current()) return;
       if (awaitingStart) return manualFallback();
-      if(line() || partial || resumed){finish(partial || !line());return;}
+      if(line() || partial || resumed){finish(partial || !line() || incomplete());return;}
       releaseInput();
       silence++;
       scheduleListen(Math.min(1900, 340 + silence * 160));
@@ -3415,7 +3428,7 @@ const Pilot = (() => {
         clearTimeout(recordLimit);
         clearTimeout(phraseTimer);
         if(line() || partial){
-          if(partial || carry || !Pilot.fragment(line())){finish(partial);return;}
+          if(partial || carry || !needsMore()){finish(partial || incomplete());return;}
           const saved=all();rec=null;r.onend=null;state('standby');
           rearm=setTimeout(()=>{if(armed&&ticket===tok&&!document.hidden&&!typed&&!player&&!rec)listen(tok,0,saved);},95);return;
         }
