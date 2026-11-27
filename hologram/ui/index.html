@@ -6,7 +6,7 @@
 #status{position:fixed;z-index:3;left:50%;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 60px);transform:translateX(-50%);width:min(90vw,580px);max-height:22vh;overflow:auto;color:#f9dfb8;background:#101010dc;border-radius:10px;text-align:center;padding:7px 10px;font:14px/1.4 system-ui;white-space:pre-wrap}#status:empty{display:none}
 #mobilebar,#typebox{display:none!important}
 #status,#review:not([hidden]){position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;overflow:hidden!important;white-space:nowrap!important;border:0!important;left:0!important;bottom:auto!important;transform:none!important}
-</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. During an active conversation JARVIS may listen while speaking so you can interrupt; browser echo cancellation varies. In cloud voice, optional local noise suppression can be enabled when supported; otherwise browser noise settings may apply. The filter can affect speech and is off by default. Browser voice input uses its own recognition service. Microphone use and transcription are subject to permission and network availability. Say noise filter off or noise filter on, or press N, to change the optional cloud noise filter for this tab. Say noise status to hear which voice mode is in use. Say listen patiently for longer pauses, or what did you hear for the last phrase. Say fast voice on for a quicker device voice, or fast voice off to try the natural voice again. If a voice request cannot be matched, try again; say open chat to review the terms for optional open conversation. External sites require a tap on the hologram after the destination is announced and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses and approval requests are spoken and announced to assistive technologies. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
+</style></head><body><main><canvas id="core" tabindex="0" role="button" aria-label="JARVIS hologram. Tap or press Space to turn hands-free conversation on or off. Drag to orbit. F for full screen; Escape to switch off the microphone." aria-describedby="keys" aria-pressed="false"></canvas><div id="mobilebar" role="group" aria-label="Conversation controls"><button id="mic-action" type="button">Mic</button><button id="type-action" type="button">Type</button></div><form id="typebox" hidden><input id="command" aria-label="Type a command" placeholder="Type a command" type="text" maxlength="360" autocomplete="off" spellcheck="false" disabled><button id="send-command" type="submit">Send</button><button id="cancel-command" type="button">Cancel</button></form><p class="sr" id="keys" lang="en">On opening this site in its own visible tab, JARVIS requests the microphone once. Allow it in the browser. If your browser requires a gesture, tap the core or press Space. A toggles automatic startup for this browser. During an active conversation JARVIS may listen while speaking so you can interrupt; browser echo cancellation varies. In cloud voice, optional local noise suppression can be enabled when supported; otherwise browser noise settings may apply. The filter can affect speech and is off by default. Browser voice input uses its own recognition service. Microphone use and transcription are subject to permission and network availability. Say noise filter off or noise filter on, or press N, to change the optional cloud noise filter for this tab. Say noise status to hear which voice mode is in use. Say wake word on to act only on recognized speech beginning with Jarvis; say Jarvis wake word off to disable. This does not identify a speaker and microphone audio may still be processed by the recognition provider. Say listen patiently for longer pauses, or what did you hear for the last phrase. Say fast voice on for a quicker device voice, or fast voice off to try the natural voice again. If a voice request cannot be matched, try again; say open chat to review the terms for optional open conversation. External sites require a tap on the hologram after the destination is announced and may open in a browser or an installed app. Supported computer apps require the private launcher and native approval. Responses and approval requests are spoken and announced to assistive technologies. Say stop listening to switch off. V: preview the speaking voice and unfolding hologram without the microphone. H: Hindi voice. E: English voice. P: pause or resume rotation. Say teach a shortcut to save a recipe with permission, or community skills to hear reviewed recipes. L: read the open chat terms in a separate tab. S: open a public draft only after an explicit share request. Arrow keys: orbit. O: owner sign-in on a configured Streamlit deployment. Browser microphone permission is required for voice commands.</p><section id="review" hidden role="group" aria-labelledby="destination"><span id="destination"></span><button id="approve" type="button"></button><button id="dismiss" type="button"></button></section><div role="status" aria-live="polite" aria-atomic="true" id="status"></div></main><script>
 "use strict";
 /* AMBER / Geometry atlas. All positions are generated in three dimensions.
    Four moving assemblies: outer skin, inner machinery, signal bus, and lens. */
@@ -2150,7 +2150,9 @@ const Pilot = (() => {
   ];
   const clean = t => String(t||'').normalize('NFKC').replace(/[’‘]/g,"'").replace(/\s+/g,' ').trim();
   const wake = t => clean(t).replace(/^(?:(?:hey|hi|ok(?:ay)?|हे|हेलो|ओके)\s+)?(?:jar\s?vis|जार्विस|जारविस|जर्विस|जार्विश|जारविश|जाविस)(?=$|[\s,:।.!?-])[\s,:।.!?-]*/iu,'');
+  const hasWake = t => wake(t) !== clean(t);
   const key = t => wake(t).toLowerCase().replace(/[?.!।,]+$/u,'').trim();
+  const isStop = t => /^(?:(?:please|बस|प्लीज़)[ ,]+)?(?:stop listening|turn (?:the )?(?:mic(?:rophone)? )?off|switch off (?:the )?mic(?:rophone)?|end (?:the )?conversation|go to sleep|(?:mic|mike|माइक|माईक|माइक्रोफोन|माइक्रोफ़ोन|मिक|conversation|बातचीत|सुनना) (?:band|बंद|बन्द|off|ऑफ|ऑफ़)(?: (?:kar(?:o)?|कर|करो))?(?: (?:do|दो|dijiye|दीजिए))?|so jao|सो जाओ|चुप हो जाओ)$/iu.test(key(t));
   const alias = new Map(); rows.forEach(([id,en,hi,url,more])=>[id,en,hi,...more.split('|')].forEach(n=>alias.set(key(n),{id,en,hi,url})));
   const prep = t => key(t).replace(/^(?:(?:can you|could you|would you|please|bhai|yaar|zara|jara|mere liye|प्ली[ज़ज]+|मेरे लिए|ज़रा|जरा|यार|भाई)\s+)+/u,'').replace(/(?:\s+(?:please|yaar|bhai|na|for me|प्लीज़|प्लीज|ना|यार|भाई))+$/u,'').trim();
   const v = '(?:open|launch|start|run|ओपन|लॉन्च|रन|स्टार्ट|खोल|चालू|शुरू|khol|chalu|shuru|chala|चला)(?:\\s+(?:kar|kr|कर|karke))?(?:\\s+(?:do|de|dena|dijiye|karo|दो|दे|देना|दीजिए|करो|कीजिए))?|kholo|kholna|kholiye|chalao|खोलो|खोलना|खोलिए|खोलें|चलाओ|चलिए';
@@ -2189,7 +2191,7 @@ const Pilot = (() => {
     return /(?:^|\s)(?:(?:में|mein|me) (?:कितने|कितना|kitne|kitna)|में|का|की|के|को|से|पर|और|तथा|गुणा|गुना|जोड़|जोड़|जमा|भाग|mein|me|ka|ki|ke|ko|se|aur|guna|jod|in|of|for|and|with|plus|minus|multiplied by|divided by|times)\s*$/u.test(q);
   };
   const fragment = t => !prep(t)||alias.has(prep(t))||dangling(t)||/^(?:open|launch|run|kholo|खोलो|मुझे|मुझे ज़रा|set a timer for|time in|weather in|search youtube for)$/.test(prep(t));
-  return {action,heard,fragment,dangling,key,wake};
+  return {action,heard,fragment,dangling,key,wake,hasWake,isStop};
 })();
 /* PILOT END */
 
@@ -2237,10 +2239,10 @@ const Pilot = (() => {
     follow = "",
     past = [],
     timer = null;
-  let phraseTimer=0, lastHeard='', lastHeardUnclear=false, patient=false, inputLang='', noiseEnabled=false, fastVoice=false;
+  let phraseTimer=0, lastHeard='', lastHeardUnclear=false, patient=false, inputLang='', noiseEnabled=false, fastVoice=false, wakeOnly=false;
   // Advanced suppression can distort speech. Default to the browser path and
   // require a per-tab opt-in; do not persist biometric data or audio.
-  try {noiseEnabled=sessionStorage.getItem('amber:noise-filter')==='on';fastVoice=sessionStorage.getItem('amber:fast-voice')==='on'} catch (_) {}
+  try {noiseEnabled=sessionStorage.getItem('amber:noise-filter')==='on';fastVoice=sessionStorage.getItem('amber:fast-voice')==='on';wakeOnly=sessionStorage.getItem('amber:wake-only')==='on'} catch (_) {}
   const cloudSpeech = document.querySelector('meta[name="jarvis-cloud"]').content === 'preview';
   let cloudConsent = false, speechTarget = '', spokenReply = '';
   const canCloud = () => !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder && (window.AudioContext || window.webkitAudioContext));
@@ -3255,6 +3257,11 @@ const Pilot = (() => {
     const finish=(unclear=false)=>{
       if(!current())return;
       const q=line(),weak=unclear || partial || !q || q.length>360 || all().some(p=>p.unsure);
+      // This filters recognized text, not voices or audio: the browser/provider
+      // may already have processed background sound. Always allow a spoken stop.
+      if (wakeOnly && !Pilot.hasWake(q) && !Pilot.isStop(q)) {
+        releaseInput();silence=rapidEnds=netErrors=0;scheduleListen(240);return;
+      }
       releaseInput();silence=rapidEnds=netErrors=0;
       const hearQuery=/^(?:what did you hear|maine kya (?:kaha|bola)|मैंने क्या (?:कहा|बोला))$/.test(Pilot.key(q));
       if(weak){
@@ -3384,7 +3391,7 @@ const Pilot = (() => {
       r.onspeechstart = () => {
         if (current()) {
           didStart();
-          if (cloudSpeech && r.barge && player) {
+          if (cloudSpeech && r.barge && player && !wakeOnly) {
             r.barge=false;
             stopAudio();
             state("listening");
@@ -3407,7 +3414,14 @@ const Pilot = (() => {
           });
           if (!rows.length) return;
         }
-        if (!cloudSpeech && r.barge && player) {
+        if (wakeOnly && r.barge && player) {
+          // Ignore background speech during playback unless the transcript
+          // starts a wake-word turn or contains an explicit stop command.
+          const i=rows.findIndex(row=>Pilot.hasWake(row?.[0]?.transcript) || Pilot.isStop(row?.[0]?.transcript));
+          if (i<0) return;
+          rows=rows.slice(i);
+        }
+        if (r.barge && player && (!cloudSpeech || wakeOnly)) {
           const text=String(rows.at(-1)?.[0]?.transcript || '').trim();
           if (text.length < 3 && rows.at(-1)?.isFinal === false) return;
           r.barge=false;
@@ -3418,7 +3432,7 @@ const Pilot = (() => {
         resumed=true; clearTimeout(phraseTimer);
         parts=rows.filter(x=>x.isFinal!==false).map(Pilot.heard).filter(Boolean);
         partial=rows.some(x=>x.isFinal===false);
-        if(!partial && /^(?:stop listening|mic band karo|माइक बंद करो|सो जाओ)$/.test(Pilot.key(line()))){parts.forEach(p=>p.unsure=false);finish();return;}
+        if(!partial && Pilot.isStop(line())){parts.forEach(p=>p.unsure=false);finish();return;}
         if(partial){stage.pulse(0.23);settle(5200);}else if(parts.length)settle(hold());
       };
       r.onerror = (e) => fail(e.error);
@@ -3622,6 +3636,13 @@ const Pilot = (() => {
       return true;
     }
     if (!fromRecipe) {
+      if (/^(?:wake word (?:on|off)|wake mode (?:on|off)|वेक वर्ड (?:चालू|बंद)(?: करो)?|वेक मोड (?:चालू|बंद)(?: करो)?)$/.test(q)) {
+        wakeOnly=!/(?:off|बंद)(?: करो)?$/.test(q);
+        try {sessionStorage.setItem('amber:wake-only',wakeOnly?'on':'off')} catch (_) {}
+        speak(wakeOnly ? words('Wake word on. Say Jarvis before each request. This is not voice identification.', 'वेक वर्ड चालू है। हर बात से पहले जार्विस बोलें। यह आवाज़ की पहचान नहीं है।') :
+          words('Wake word off. Direct conversation is restored.', 'वेक वर्ड बंद है। अब सीधे बात कर सकते हैं।'),locale,tok);
+        return true;
+      }
       if (/^(?:fast voice (?:on|off)|(?:तेज़|तेज) आवाज़ (?:चालू|बंद)(?: करो)?|(?:तेज़|तेज) आवाज (?:चालू|बंद)(?: करो)?)$/.test(q)) {
         const enable=!/(?:off|बंद)(?: करो)?$/.test(q);
         if (enable && !(synth && window.SpeechSynthesisUtterance)) {
